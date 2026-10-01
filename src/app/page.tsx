@@ -19,33 +19,19 @@ import {
 import { DayLog, TimeEntry } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF } from '@/lib/pdfExport';
 
-const STORAGE_KEY = 'id2950_minimal_days_v2';
+const STORAGE_KEY = 'id2950_clean_canvas_v1';
 
 const DEFAULT_DAYS: DayLog[] = [
   {
     id: 'day-1',
-    name: '2 October 2026',
+    name: '',
     month: 'October 2026',
     entries: [
       {
         id: 'entry-1',
-        startTime: '3:00',
-        endTime: '4:00',
-        work: '$1.3B AI CEO: "You ONLY Need 2 People and 90 Days to Build a $1M Business" | Higgsfield Founder',
-        notes: '• Core Lesson: Build lean with high agency individuals.\n• Speed of iteration beats raw headcount.\n• Ship MVP within 90 days to test real market willingness to pay.',
-      },
-      {
-        id: 'entry-2',
-        startTime: '9:00',
-        endTime: '10:00',
-        work: 'Book reading',
-        notes: 'Read 25 pages. Habit stacking and environment cues drive 80% of daily consistency.',
-      },
-      {
-        id: 'entry-3',
-        startTime: '10:00',
-        endTime: '12:30',
-        work: 'Self development project',
+        startTime: '',
+        endTime: '',
+        work: '',
         notes: '',
       },
     ],
@@ -61,9 +47,7 @@ export default function ID2950Page() {
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [editingDayName, setEditingDayName] = useState<string>('');
   const [copiedDayId, setCopiedDayId] = useState<string | null>(null);
-  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({
-    'entry-1': true, // open default so user sees it right away
-  });
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Load from localStorage on mount
@@ -124,9 +108,9 @@ export default function ID2950Page() {
       entries: [
         {
           id: `entry-${Date.now()}-1`,
-          startTime: '9:00',
-          endTime: '10:00',
-          work: 'Book reading',
+          startTime: '',
+          endTime: '',
+          work: '',
           notes: '',
         },
       ],
@@ -168,10 +152,9 @@ export default function ID2950Page() {
     const newEntryId = `entry-${Date.now()}`;
     const updated = days.map((d) => {
       if (d.id !== dayId) return d;
-      const lastEntry = d.entries[d.entries.length - 1];
       const newEntry: TimeEntry = {
         id: newEntryId,
-        startTime: lastEntry ? lastEntry.endTime : '9:00',
+        startTime: '',
         endTime: '',
         work: '',
         notes: '',
@@ -465,7 +448,7 @@ export default function ID2950Page() {
                         <div className="col-span-2 lg:col-span-2">
                           <input
                             type="text"
-                            placeholder="3:00"
+                            placeholder="Start"
                             value={entry.startTime}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
@@ -478,7 +461,7 @@ export default function ID2950Page() {
                         <div className="col-span-2 lg:col-span-2">
                           <input
                             type="text"
-                            placeholder="4:00"
+                            placeholder="End"
                             value={entry.endTime}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
@@ -491,7 +474,7 @@ export default function ID2950Page() {
                         <div className="col-span-6 lg:col-span-6">
                           <input
                             type="text"
-                            placeholder="e.g. $1.3B AI CEO: Higgsfield Founder Interview, Book reading..."
+                            placeholder="What work I do..."
                             value={entry.work}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
@@ -569,7 +552,7 @@ export default function ID2950Page() {
                             </label>
                             <input
                               type="text"
-                              placeholder="3:00"
+                              placeholder="Start"
                               value={entry.startTime}
                               onChange={(e) =>
                                 handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
@@ -584,7 +567,7 @@ export default function ID2950Page() {
                             </label>
                             <input
                               type="text"
-                              placeholder="4:00"
+                              placeholder="End"
                               value={entry.endTime}
                               onChange={(e) =>
                                 handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
@@ -601,7 +584,7 @@ export default function ID2950Page() {
                           </label>
                           <input
                             type="text"
-                            placeholder="e.g. Higgsfield Founder Interview, Book reading..."
+                            placeholder="What work I do..."
                             value={entry.work}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
@@ -630,7 +613,7 @@ export default function ID2950Page() {
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'notes', e.target.value)
                             }
-                            placeholder="Write your learnings, takeaways, key timestamps, or video insights here... (e.g. • Only need 2 people + 90 days to test PMF...)"
+                            placeholder="Write your learnings, takeaways, or notes here..."
                             className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-neutral-200 outline-none leading-relaxed resize-y min-h-[75px]"
                           />
 
@@ -687,7 +670,7 @@ export default function ID2950Page() {
           <form onSubmit={handleAddDay} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <input
               type="text"
-              placeholder="e.g. 3 October 2026 or Sunset Day 2"
+              placeholder="Assign day name..."
               value={newDayName}
               onChange={(e) => setNewDayName(e.target.value)}
               className="w-full sm:flex-1 bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-xl px-4 py-2.5 sm:py-3 text-sm text-neutral-100 outline-none transition"
