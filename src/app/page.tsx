@@ -38,6 +38,75 @@ const DEFAULT_DAYS: DayLog[] = [
   },
 ];
 
+// Automatically formats time on input: e.g. typing "4" instantly becomes "4:00"
+function formatTimeOnInput(val: string): string {
+  const trimmed = val.trim();
+  if (!trimmed) return '';
+
+  // If user typed a single digit 3-9: e.g. "4" -> "4:00"
+  if (/^[3-9]$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+
+  // If user typed "10", "11", "12", "13".."24" -> "10:00"
+  if (/^(1[0-9]|2[0-4])$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+
+  // If user typed e.g. "4:" or "1:" -> "4:00"
+  if (/^(\d{1,2}):$/.test(trimmed)) {
+    return `${trimmed}00`;
+  }
+
+  // If user typed e.g. "430" -> "4:30"
+  if (/^([1-9])([0-5]\d)$/.test(trimmed)) {
+    return `${trimmed[0]}:${trimmed.slice(1)}`;
+  }
+
+  // If user typed e.g. "1030" -> "10:30"
+  if (/^(\d{2})([0-5]\d)$/.test(trimmed)) {
+    return `${trimmed.slice(0, 2)}:${trimmed.slice(2)}`;
+  }
+
+  return val;
+}
+
+// Formats time on blur: e.g. "1" -> "1:00", "2" -> "2:00", "4:3" -> "4:30"
+function formatTimeOnBlur(val: string): string {
+  const trimmed = val.trim();
+  if (!trimmed) return '';
+
+  // Already standard format e.g. "4:00", "14:30"
+  if (/^\d{1,2}:\d{2}$/.test(trimmed)) return trimmed;
+
+  // Single digit (including 1 or 2) or double digit: e.g. "1" -> "1:00", "2" -> "2:00", "4" -> "4:00"
+  if (/^\d{1,2}$/.test(trimmed)) {
+    return `${trimmed}:00`;
+  }
+
+  // e.g. "4:" -> "4:00"
+  if (/^\d{1,2}:$/.test(trimmed)) {
+    return `${trimmed}00`;
+  }
+
+  // e.g. "4:3" -> "4:30"
+  if (/^\d{1,2}:\d$/.test(trimmed)) {
+    return `${trimmed}0`;
+  }
+
+  // e.g. "430" -> "4:30"
+  if (/^([1-9])([0-5]\d)$/.test(trimmed)) {
+    return `${trimmed[0]}:${trimmed.slice(1)}`;
+  }
+
+  // e.g. "1030" -> "10:30"
+  if (/^(\d{2})([0-5]\d)$/.test(trimmed)) {
+    return `${trimmed.slice(0, 2)}:${trimmed.slice(2)}`;
+  }
+
+  return trimmed;
+}
+
 export default function ID2950Page() {
   const [days, setDays] = useState<DayLog[]>([]);
   const [activeMonth, setActiveMonth] = useState<string>('October 2026');
@@ -186,6 +255,29 @@ export default function ID2950Page() {
       };
     });
     saveDays(updated);
+  };
+
+  // Handle start and end time inputs with automatic :00 completion
+  const handleUpdateTime = (
+    dayId: string,
+    entryId: string,
+    field: 'startTime' | 'endTime',
+    rawVal: string,
+    isBlur: boolean = false
+  ) => {
+    let finalVal = rawVal;
+    if (isBlur) {
+      finalVal = formatTimeOnBlur(rawVal);
+    } else {
+      const currentDay = days.find((d) => d.id === dayId);
+      const currentEntry = currentDay?.entries.find((e) => e.id === entryId);
+      const prevVal = currentEntry ? currentEntry[field] : '';
+      // Only auto-expand if user is typing (length increasing)
+      if (rawVal.length > prevVal.length) {
+        finalVal = formatTimeOnInput(rawVal);
+      }
+    }
+    handleUpdateEntry(dayId, entryId, field, finalVal);
   };
 
   // Helper to get works list as array of strings
@@ -531,7 +623,10 @@ export default function ID2950Page() {
                             placeholder="Start"
                             value={entry.startTime}
                             onChange={(e) =>
-                              handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
+                              handleUpdateTime(day.id, entry.id, 'startTime', e.target.value, false)
+                            }
+                            onBlur={(e) =>
+                              handleUpdateTime(day.id, entry.id, 'startTime', e.target.value, true)
                             }
                             className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
                           />
@@ -544,7 +639,10 @@ export default function ID2950Page() {
                             placeholder="End"
                             value={entry.endTime}
                             onChange={(e) =>
-                              handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
+                              handleUpdateTime(day.id, entry.id, 'endTime', e.target.value, false)
+                            }
+                            onBlur={(e) =>
+                              handleUpdateTime(day.id, entry.id, 'endTime', e.target.value, true)
                             }
                             className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
                           />
@@ -668,7 +766,10 @@ export default function ID2950Page() {
                               placeholder="Start"
                               value={entry.startTime}
                               onChange={(e) =>
-                                handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
+                                handleUpdateTime(day.id, entry.id, 'startTime', e.target.value, false)
+                              }
+                              onBlur={(e) =>
+                                handleUpdateTime(day.id, entry.id, 'startTime', e.target.value, true)
                               }
                               className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
                             />
@@ -683,7 +784,10 @@ export default function ID2950Page() {
                               placeholder="End"
                               value={entry.endTime}
                               onChange={(e) =>
-                                handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
+                                handleUpdateTime(day.id, entry.id, 'endTime', e.target.value, false)
+                              }
+                              onBlur={(e) =>
+                                handleUpdateTime(day.id, entry.id, 'endTime', e.target.value, true)
                               }
                               className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
                             />
