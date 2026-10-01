@@ -1,6 +1,6 @@
-# ID2950 — Minimalist Self-Assigned Day & Productivity Logger
+# ID2950_Documenting — Self-Assigned Day & Productivity Logger
 
-A clean, minimalist Next.js application designed for total control over how you document your day. 
+A clean, distraction-free Next.js application designed for total control over how you document your day. 
 
 Instead of being bound to rigid 12:00 AM midnight system clocks, **all months, day names, and times are self-assigned by you** (ideal for starting your day at sunset, dawn, or any rhythm you choose).
 

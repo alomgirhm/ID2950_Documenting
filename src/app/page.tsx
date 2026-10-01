@@ -316,7 +316,7 @@ export default function ID2950Page() {
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-400 flex items-center justify-center font-mono text-xs">
-        Loading ID2950...
+        Loading ID2950_Documenting...
       </div>
     );
   }
@@ -324,7 +324,7 @@ export default function ID2950Page() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans antialiased selection:bg-neutral-800">
       
-      {/* Top Minimalist Header */}
+      {/* Top Header */}
       <header className="border-b border-neutral-900 px-4 sm:px-8 lg:px-12 py-4 sm:py-5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           
@@ -332,10 +332,7 @@ export default function ID2950Page() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xl sm:text-2xl font-bold tracking-tight text-white font-mono">
-                ID2950
-              </span>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400">
-                minimal
+                ID2950_Documenting
               </span>
             </div>
             <p className="text-xs text-neutral-500 mt-1 flex items-center gap-1.5 flex-wrap">
@@ -830,9 +827,9 @@ export default function ID2950Page() {
 
       </main>
 
-      {/* Minimal Wide Footer */}
+      {/* Footer */}
       <footer className="border-t border-neutral-900 py-6 text-center text-xs font-mono text-neutral-600 px-4">
-        ID2950 // Minimal Productivity Log // Self-Assigned Time & Days
+        ID2950_Documenting // Productivity Log // Self-Assigned Time & Days
       </footer>
 
     </div>

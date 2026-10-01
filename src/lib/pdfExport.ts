@@ -39,14 +39,14 @@ export function downloadDayPDF(day: DayLog) {
 
   // 1. Header Banner
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
+  doc.setFontSize(18);
   doc.setTextColor(20, 20, 25);
-  doc.text('ID2950', margin, y);
+  doc.text('ID2950_Documenting', margin, y);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(110, 110, 120);
-  doc.text('DAILY PRODUCTIVITY & LEARNINGS REPORT', margin + 26, y - 1);
+  doc.text('DAILY PRODUCTIVITY & LEARNINGS REPORT', margin + 68, y - 1);
 
   y += 8;
 
@@ -151,14 +151,14 @@ export function downloadDayPDF(day: DayLog) {
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 150);
   doc.text(
-    `ID2950 Personal Operating System — Generated with self-assigned time & notes. Total Sessions: ${day.entries.length}`,
+    `ID2950_Documenting Personal Operating System — Generated with self-assigned time & notes. Total Sessions: ${day.entries.length}`,
     margin,
     y
   );
 
   // File download name sanitization
   const safeName = (day.name || 'Day').replace(/[^a-zA-Z0-9_-]/g, '_');
-  doc.save(`ID2950_${safeName}_Notes.pdf`);
+  doc.save(`ID2950_Documenting_${safeName}_Notes.pdf`);
 }
 
 /**
@@ -178,14 +178,14 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
 
   // Header
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
+  doc.setFontSize(18);
   doc.setTextColor(20, 20, 25);
-  doc.text('ID2950', margin, y);
+  doc.text('ID2950_Documenting', margin, y);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(110, 110, 120);
-  doc.text('SINGLE SESSION LEARNING RECORD', margin + 26, y - 1);
+  doc.text('SINGLE SESSION LEARNING RECORD', margin + 68, y - 1);
 
   y += 8;
 
@@ -269,8 +269,8 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 150);
-  doc.text('ID2950 Personal Operating System — Verified Session Record', margin, y);
+  doc.text('ID2950_Documenting Personal Operating System — Verified Session Record', margin, y);
 
   const safeWork = (entry.work || 'Session').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30);
-  doc.save(`ID2950_${entry.startTime || 'session'}_${safeWork}.pdf`);
+  doc.save(`ID2950_Documenting_${entry.startTime || 'session'}_${safeWork}.pdf`);
 }
