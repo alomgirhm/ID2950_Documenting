@@ -1,10 +1,23 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Edit2, Check, Sunset, Copy, CheckCheck, ArrowRight } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  Calendar, 
+  Edit2, 
+  Check, 
+  Sunset, 
+  Copy, 
+  CheckCheck, 
+  FileText, 
+  ChevronDown, 
+  ChevronUp,
+  Sparkles
+} from 'lucide-react';
 import { DayLog, TimeEntry } from '@/types';
 
-const STORAGE_KEY = 'id2950_minimal_days_v1';
+const STORAGE_KEY = 'id2950_minimal_days_v2';
 
 const DEFAULT_DAYS: DayLog[] = [
   {
@@ -14,21 +27,24 @@ const DEFAULT_DAYS: DayLog[] = [
     entries: [
       {
         id: 'entry-1',
-        startTime: '9:00',
-        endTime: '10:00',
-        work: 'Book reading',
+        startTime: '3:00',
+        endTime: '4:00',
+        work: '$1.3B AI CEO: "You ONLY Need 2 People and 90 Days to Build a $1M Business" | Higgsfield Founder',
+        notes: '• Core Lesson: Build lean with high agency individuals.\n• Speed of iteration beats raw headcount.\n• Ship MVP within 90 days to test real market willingness to pay.',
       },
       {
         id: 'entry-2',
-        startTime: '10:00',
-        endTime: '12:30',
-        work: 'Self development project',
+        startTime: '9:00',
+        endTime: '10:00',
+        work: 'Book reading',
+        notes: 'Read 25 pages. Habit stacking and environment cues drive 80% of daily consistency.',
       },
       {
         id: 'entry-3',
-        startTime: '13:30',
-        endTime: '15:00',
-        work: 'Deep focus & coding practice',
+        startTime: '10:00',
+        endTime: '12:30',
+        work: 'Self development project',
+        notes: '',
       },
     ],
   },
@@ -43,6 +59,9 @@ export default function ID2950Page() {
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [editingDayName, setEditingDayName] = useState<string>('');
   const [copiedDayId, setCopiedDayId] = useState<string | null>(null);
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({
+    'entry-1': true, // open default so user sees it right away
+  });
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Load from localStorage on mount
@@ -82,6 +101,14 @@ export default function ID2950Page() {
   // Filter days for active month
   const filteredDays = days.filter((d) => d.month === activeMonth);
 
+  // Toggle notes dropdown for a specific entry
+  const toggleNotes = (entryId: string) => {
+    setExpandedNotes((prev) => ({
+      ...prev,
+      [entryId]: !prev[entryId],
+    }));
+  };
+
   // Add a new Day with user-assigned name
   const handleAddDay = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +125,7 @@ export default function ID2950Page() {
           startTime: '9:00',
           endTime: '10:00',
           work: 'Book reading',
+          notes: '',
         },
       ],
     };
@@ -135,14 +163,16 @@ export default function ID2950Page() {
 
   // Add Time Entry under a Day
   const handleAddTimeEntry = (dayId: string) => {
+    const newEntryId = `entry-${Date.now()}`;
     const updated = days.map((d) => {
       if (d.id !== dayId) return d;
       const lastEntry = d.entries[d.entries.length - 1];
       const newEntry: TimeEntry = {
-        id: `entry-${Date.now()}`,
+        id: newEntryId,
         startTime: lastEntry ? lastEntry.endTime : '9:00',
         endTime: '',
         work: '',
+        notes: '',
       };
       return {
         ...d,
@@ -150,13 +180,15 @@ export default function ID2950Page() {
       };
     });
     saveDays(updated);
+    // Auto-open notes for newly added entry
+    setExpandedNotes((prev) => ({ ...prev, [newEntryId]: false }));
   };
 
   // Update a specific Time Entry
   const handleUpdateEntry = (
     dayId: string,
     entryId: string,
-    field: 'startTime' | 'endTime' | 'work',
+    field: 'startTime' | 'endTime' | 'work' | 'notes',
     value: string
   ) => {
     const updated = days.map((d) => {
@@ -193,12 +225,19 @@ export default function ID2950Page() {
     setIsAddingMonth(false);
   };
 
-  // Copy day entries to clipboard as clean text
+  // Copy day entries to clipboard as clean text (with notes)
   const handleCopyDay = (day: DayLog) => {
     let text = `${day.name} (${day.month})\n`;
-    text += '------------------------------------\n';
+    text += '====================================\n';
     day.entries.forEach((e) => {
-      text += `${e.startTime || '--:--'} - ${e.endTime || '--:--'} : ${e.work || '(no work specified)'}\n`;
+      text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${e.work || '(no work specified)'}\n`;
+      if (e.notes && e.notes.trim()) {
+        const indentedNotes = e.notes
+          .split('\n')
+          .map((line) => `    ↳ ${line}`)
+          .join('\n');
+        text += `${indentedNotes}\n`;
+      }
     });
     navigator.clipboard.writeText(text).then(() => {
       setCopiedDayId(day.id);
@@ -217,7 +256,7 @@ export default function ID2950Page() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans antialiased selection:bg-neutral-800">
       
-      {/* Top Minimalist Wide Header */}
+      {/* Top Minimalist Header */}
       <header className="border-b border-neutral-900 px-4 sm:px-8 lg:px-12 py-4 sm:py-5">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           
@@ -357,7 +396,7 @@ export default function ID2950Page() {
                     <button
                       onClick={() => handleCopyDay(day)}
                       className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
-                      title="Copy Day Summary"
+                      title="Copy Day Summary (Includes Notes)"
                     >
                       {copiedDayId === day.id ? (
                         <>
@@ -385,141 +424,209 @@ export default function ID2950Page() {
               </div>
 
               {/* Time Entries Table / Boxes */}
-              <div className="space-y-3">
+              <div className="space-y-3.5">
                 
                 {/* Column Headers for Medium & Wide screens */}
                 <div className="hidden sm:grid grid-cols-12 gap-3 text-[11px] font-mono uppercase tracking-wider text-neutral-500 px-1 pb-1">
                   <div className="col-span-2 lg:col-span-2">Start Time</div>
                   <div className="col-span-2 lg:col-span-2">End Time</div>
-                  <div className="col-span-7 lg:col-span-7">What work I do</div>
+                  <div className="col-span-6 lg:col-span-6">What work I do</div>
+                  <div className="col-span-1 lg:col-span-1 text-center">Notes</div>
                   <div className="col-span-1 lg:col-span-1 text-right">Remove</div>
                 </div>
 
-                {/* Rows with editable input boxes */}
-                {day.entries.map((entry, index) => (
-                  <div
-                    key={entry.id}
-                    className="p-3 sm:p-0 rounded-xl bg-neutral-950/60 sm:bg-transparent border sm:border-0 border-neutral-850 transition"
-                  >
-                    
-                    {/* Desktop / Wide layout (sm and up) */}
-                    <div className="hidden sm:grid grid-cols-12 gap-3 items-center group">
+                {/* Rows with editable input boxes and collapsible notes */}
+                {day.entries.map((entry, index) => {
+                  const isNotesOpen = !!expandedNotes[entry.id];
+                  const hasNotes = Boolean(entry.notes && entry.notes.trim().length > 0);
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="rounded-xl border border-neutral-850 hover:border-neutral-800/90 bg-neutral-950/40 transition overflow-hidden"
+                    >
                       
-                      {/* Start Time Box */}
-                      <div className="col-span-2 lg:col-span-2">
-                        <input
-                          type="text"
-                          placeholder="9:00"
-                          value={entry.startTime}
-                          onChange={(e) =>
-                            handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
-                          }
-                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
-                        />
-                      </div>
-
-                      {/* End Time Box */}
-                      <div className="col-span-2 lg:col-span-2">
-                        <input
-                          type="text"
-                          placeholder="10:00"
-                          value={entry.endTime}
-                          onChange={(e) =>
-                            handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
-                          }
-                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
-                        />
-                      </div>
-
-                      {/* What Work I Do Box */}
-                      <div className="col-span-7 lg:col-span-7">
-                        <input
-                          type="text"
-                          placeholder="e.g. Book reading, Self development project, Deep focus..."
-                          value={entry.work}
-                          onChange={(e) =>
-                            handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
-                          }
-                          className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-neutral-200 outline-none transition"
-                        />
-                      </div>
-
-                      {/* Remove Entry */}
-                      <div className="col-span-1 lg:col-span-1 text-right">
-                        <button
-                          onClick={() => handleDeleteEntry(day.id, entry.id)}
-                          className="text-neutral-500 hover:text-rose-400 p-2 text-sm rounded-lg hover:bg-neutral-800 transition"
-                          title="Delete entry"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Mobile Friendly Layout (Screen < 640px) */}
-                    <div className="sm:hidden space-y-2">
-                      <div className="flex items-center justify-between text-[11px] font-mono text-neutral-500 pb-1">
-                        <span>Block #{index + 1}</span>
-                        <button
-                          onClick={() => handleDeleteEntry(day.id, entry.id)}
-                          className="text-neutral-500 hover:text-rose-400 px-2 py-0.5 text-xs rounded transition"
-                        >
-                          ✕ Remove
-                        </button>
-                      </div>
-
-                      {/* Start and End side-by-side on mobile */}
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
-                            Start Time
-                          </label>
+                      {/* Desktop / Wide layout (sm and up) */}
+                      <div className="hidden sm:grid grid-cols-12 gap-3 items-center p-3">
+                        
+                        {/* Start Time Box */}
+                        <div className="col-span-2 lg:col-span-2">
                           <input
                             type="text"
-                            placeholder="9:00"
+                            placeholder="3:00"
                             value={entry.startTime}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
                             }
-                            className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
+                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
                           />
                         </div>
 
-                        <div>
-                          <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
-                            End Time
-                          </label>
+                        {/* End Time Box */}
+                        <div className="col-span-2 lg:col-span-2">
                           <input
                             type="text"
-                            placeholder="10:00"
+                            placeholder="4:00"
                             value={entry.endTime}
                             onChange={(e) =>
                               handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
                             }
-                            className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
+                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
+                          />
+                        </div>
+
+                        {/* What Work I Do Box */}
+                        <div className="col-span-6 lg:col-span-6">
+                          <input
+                            type="text"
+                            placeholder="e.g. $1.3B AI CEO: Higgsfield Founder Interview, Book reading..."
+                            value={entry.work}
+                            onChange={(e) =>
+                              handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
+                            }
+                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-neutral-200 outline-none transition"
+                          />
+                        </div>
+
+                        {/* Dropable Notes Toggle Button */}
+                        <div className="col-span-1 lg:col-span-1 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => toggleNotes(entry.id)}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-mono transition ${
+                              hasNotes
+                                ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30 hover:bg-amber-500/20'
+                                : 'bg-neutral-900 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                            }`}
+                            title={isNotesOpen ? 'Collapse Notes' : 'Open Notes & Learnings'}
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            {isNotesOpen ? (
+                              <ChevronUp className="w-3 h-3 text-neutral-400" />
+                            ) : (
+                              <ChevronDown className="w-3 h-3 text-neutral-400" />
+                            )}
+                          </button>
+                        </div>
+
+                        {/* Remove Entry */}
+                        <div className="col-span-1 lg:col-span-1 text-right">
+                          <button
+                            onClick={() => handleDeleteEntry(day.id, entry.id)}
+                            className="text-neutral-500 hover:text-rose-400 p-2 text-sm rounded-lg hover:bg-neutral-800 transition"
+                            title="Delete entry"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mobile Friendly Layout (Screen < 640px) */}
+                      <div className="sm:hidden p-3 space-y-2.5">
+                        <div className="flex items-center justify-between text-[11px] font-mono text-neutral-500">
+                          <span>Block #{index + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleNotes(entry.id)}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-mono transition ${
+                                hasNotes
+                                  ? 'bg-amber-500/10 text-amber-300 border border-amber-500/30'
+                                  : 'bg-neutral-900 text-neutral-400 border border-neutral-800'
+                              }`}
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span>{isNotesOpen ? 'Close' : 'Notes'}</span>
+                              {isNotesOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteEntry(day.id, entry.id)}
+                              className="text-neutral-500 hover:text-rose-400 px-2 py-1 text-xs rounded transition"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Start and End side-by-side on mobile */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
+                              Start Time
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="3:00"
+                              value={entry.startTime}
+                              onChange={(e) =>
+                                handleUpdateEntry(day.id, entry.id, 'startTime', e.target.value)
+                              }
+                              className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
+                              End Time
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="4:00"
+                              value={entry.endTime}
+                              onChange={(e) =>
+                                handleUpdateEntry(day.id, entry.id, 'endTime', e.target.value)
+                              }
+                              className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
+                            />
+                          </div>
+                        </div>
+
+                        {/* What Work I Do on mobile */}
+                        <div>
+                          <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
+                            What work I do
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Higgsfield Founder Interview, Book reading..."
+                            value={entry.work}
+                            onChange={(e) =>
+                              handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
+                            }
+                            className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none"
                           />
                         </div>
                       </div>
 
-                      {/* What Work I Do on mobile */}
-                      <div>
-                        <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
-                          What work I do
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Book reading, Coding..."
-                          value={entry.work}
-                          onChange={(e) =>
-                            handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
-                          }
-                          className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none"
-                        />
-                      </div>
-                    </div>
+                      {/* Dropable Notes & Learnings Drawer */}
+                      {isNotesOpen && (
+                        <div className="px-3 sm:px-4 pb-3.5 pt-2 bg-neutral-950/80 border-t border-neutral-850/80 transition-all">
+                          <div className="flex items-center justify-between pb-1.5">
+                            <label className="text-[11px] font-mono uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5 font-semibold">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              Learnings & Notes from this session
+                            </label>
+                            <span className="text-[10px] text-neutral-500 font-mono">
+                              Markdown / bullets supported
+                            </span>
+                          </div>
 
-                  </div>
-                ))}
+                          <textarea
+                            rows={3}
+                            value={entry.notes || ''}
+                            onChange={(e) =>
+                              handleUpdateEntry(day.id, entry.id, 'notes', e.target.value)
+                            }
+                            placeholder="Write your learnings, takeaways, key timestamps, or video insights here... (e.g. • Only need 2 people + 90 days to test PMF...)"
+                            className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-neutral-200 outline-none leading-relaxed resize-y min-h-[75px]"
+                          />
+                        </div>
+                      )}
+
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Add Time Entry Button under Day */}
