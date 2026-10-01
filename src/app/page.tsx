@@ -16,7 +16,8 @@ import {
   Sparkles,
   Download,
   Smartphone,
-  ClipboardPaste
+  ClipboardPaste,
+  Wifi
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF } from '@/lib/pdfExport';
@@ -147,6 +148,47 @@ export default function ID2950Page() {
     }
     setIsLoaded(true);
   }, []);
+
+  // Auto-sync polling for mobile screen time sent via local Wi-Fi API
+  useEffect(() => {
+    if (!isLoaded) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/wellbeing');
+        const json = await res.json();
+        if (json.success && json.data && json.data.receivedAt) {
+          const lastSynced = localStorage.getItem('id2950_last_wellbeing_sync');
+          if (lastSynced !== json.data.receivedAt) {
+            localStorage.setItem('id2950_last_wellbeing_sync', json.data.receivedAt);
+            if (json.data.apps && json.data.apps.length > 0) {
+              setDays((prev) => {
+                const targetDayId = json.data.dayId || prev[0]?.id;
+                if (!targetDayId) return prev;
+                const updated = prev.map((d) => {
+                  if (d.id === targetDayId) {
+                    const newApps = json.data.apps.map((a: { appName: string; duration: string }) => ({
+                      id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                      appName: a.appName || '',
+                      duration: a.duration || '',
+                    }));
+                    return { ...d, appUsage: [...(d.appUsage || []), ...newApps] };
+                  }
+                  return d;
+                });
+                if (typeof window !== 'undefined') {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+                }
+                return updated;
+              });
+            }
+          }
+        }
+      } catch {
+        // silent
+      }
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [isLoaded]);
 
   // Save to localStorage whenever days state changes
   const saveDays = (updatedDays: DayLog[]) => {
@@ -477,6 +519,35 @@ export default function ID2950Page() {
       saveDays(updated);
       setPasteWellbeingDayId(null);
       setPasteWellbeingText('');
+    }
+  };
+
+  // Pull latest screen time posted via local Wi-Fi API (POST /api/wellbeing)
+  const handleFetchSync = async (dayId: string) => {
+    try {
+      const res = await fetch('/api/wellbeing');
+      const json = await res.json();
+      if (json.success && json.data) {
+        if (json.data.apps && json.data.apps.length > 0) {
+          const newApps = json.data.apps.map((a: { appName: string; duration: string }) => ({
+            id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            appName: a.appName || '',
+            duration: a.duration || '',
+          }));
+          const updated = days.map((d) => {
+            if (d.id !== dayId) return d;
+            return {
+              ...d,
+              appUsage: [...(d.appUsage || []), ...newApps],
+            };
+          });
+          saveDays(updated);
+        } else if (json.data.rawText) {
+          handleParseAndImportWellbeing(dayId, json.data.rawText);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching wellbeing data:', err);
     }
   };
 
@@ -1047,7 +1118,7 @@ export default function ID2950Page() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         onClick={() => handleAddAppUsage(day.id)}
@@ -1069,6 +1140,16 @@ export default function ID2950Page() {
                       >
                         <ClipboardPaste className="w-3 h-3 text-indigo-400" />
                         <span>Paste / Import</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleFetchSync(day.id)}
+                        className="flex items-center gap-1 text-[11px] text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg bg-indigo-950/60 hover:bg-indigo-900/60 border border-indigo-800/60 transition"
+                        title="Pull latest screen time sent from Samsung over Wi-Fi"
+                      >
+                        <Wifi className="w-3 h-3 text-indigo-400" />
+                        <span>Wi-Fi Sync Now</span>
                       </button>
                     </div>
                   </div>
@@ -1151,9 +1232,9 @@ export default function ID2950Page() {
                   )}
 
                   {/* Sync Instructions Hint */}
-                  <div className="pt-2 text-[10px] text-neutral-500 font-mono flex items-center justify-between">
+                  <div className="pt-2 text-[10px] text-neutral-500 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <span>Included in daily PDF report</span>
-                    <span>Local API: POST /api/wellbeing</span>
+                    <span>Local Wi-Fi POST: <code className="text-indigo-400 bg-neutral-900 px-1.5 py-0.5 rounded">http://192.168.0.201:3000/api/wellbeing</code></span>
                   </div>
                 </div>
               )}
