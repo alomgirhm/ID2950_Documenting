@@ -114,6 +114,34 @@ function formatTimeOnBlur(val: string): string {
   return trimmed;
 }
 
+// Merge incoming app usage by app name to prevent duplicate rows
+function mergeOrUpdateAppUsage(
+  current: AppUsageItem[] = [],
+  incoming: { appName: string; duration: string }[]
+): AppUsageItem[] {
+  const result: AppUsageItem[] = [...current];
+  incoming.forEach((inc) => {
+    const trimmedName = inc.appName.trim();
+    if (!trimmedName) return;
+    const existingIndex = result.findIndex(
+      (a) => a.appName.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (existingIndex >= 0) {
+      result[existingIndex] = {
+        ...result[existingIndex],
+        duration: inc.duration.trim() || result[existingIndex].duration,
+      };
+    } else {
+      result.push({
+        id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        appName: trimmedName,
+        duration: inc.duration.trim(),
+      });
+    }
+  });
+  return result;
+}
+
 export default function ID2950Page() {
   const [days, setDays] = useState<DayLog[]>([]);
   const [activeMonth, setActiveMonth] = useState<string>('October 2026');
@@ -166,12 +194,10 @@ export default function ID2950Page() {
                 if (!targetDayId) return prev;
                 const updated = prev.map((d) => {
                   if (d.id === targetDayId) {
-                    const newApps = json.data.apps.map((a: { appName: string; duration: string }) => ({
-                      id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                      appName: a.appName || '',
-                      duration: a.duration || '',
-                    }));
-                    return { ...d, appUsage: [...(d.appUsage || []), ...newApps] };
+                    return {
+                      ...d,
+                      appUsage: mergeOrUpdateAppUsage(d.appUsage || [], json.data.apps),
+                    };
                   }
                   return d;
                 });
@@ -510,16 +536,21 @@ export default function ID2950Page() {
     if (parsed.length > 0) {
       const updated = days.map((d) => {
         if (d.id !== dayId) return d;
-        const current = d.appUsage || [];
         return {
           ...d,
-          appUsage: [...current, ...parsed],
+          appUsage: mergeOrUpdateAppUsage(d.appUsage || [], parsed),
         };
       });
       saveDays(updated);
       setPasteWellbeingDayId(null);
       setPasteWellbeingText('');
     }
+  };
+
+  // Clear all mobile apps for a day
+  const handleClearAllAppUsage = (dayId: string) => {
+    const updated = days.map((d) => (d.id === dayId ? { ...d, appUsage: [] } : d));
+    saveDays(updated);
   };
 
   // Pull latest screen time posted via local Wi-Fi API (POST /api/wellbeing)
@@ -529,16 +560,11 @@ export default function ID2950Page() {
       const json = await res.json();
       if (json.success && json.data) {
         if (json.data.apps && json.data.apps.length > 0) {
-          const newApps = json.data.apps.map((a: { appName: string; duration: string }) => ({
-            id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            appName: a.appName || '',
-            duration: a.duration || '',
-          }));
           const updated = days.map((d) => {
             if (d.id !== dayId) return d;
             return {
               ...d,
-              appUsage: [...(d.appUsage || []), ...newApps],
+              appUsage: mergeOrUpdateAppUsage(d.appUsage || [], json.data.apps),
             };
           });
           saveDays(updated);
@@ -1151,6 +1177,18 @@ export default function ID2950Page() {
                         <Wifi className="w-3 h-3 text-indigo-400" />
                         <span>Wi-Fi Sync Now</span>
                       </button>
+
+                      {day.appUsage && day.appUsage.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleClearAllAppUsage(day.id)}
+                          className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg bg-rose-950/30 hover:bg-rose-900/40 border border-rose-900/40 transition"
+                          title="Clear all tracked apps"
+                        >
+                          <Trash2 className="w-3 h-3 text-rose-400" />
+                          <span>Clear All</span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
