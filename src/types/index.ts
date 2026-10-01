@@ -2,7 +2,8 @@ export interface TimeEntry {
   id: string;
   startTime: string; // e.g. "3:00"
   endTime: string;   // e.g. "4:00"
-  work: string;      // e.g. "$1.3B AI CEO: 'You ONLY Need 2 People and 90 Days to Build a $1M Business' | Higgsfield Founder"
+  work: string;      // main work or summary
+  works?: string[];  // multiple numbered works in the same session: ["Work 1", "Work 2", ...]
   notes?: string;    // collapsible notes / learnings from video, book, or work
 }
 

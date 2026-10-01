@@ -188,6 +188,81 @@ export default function ID2950Page() {
     saveDays(updated);
   };
 
+  // Helper to get works list as array of strings
+  const getWorksList = (entry: TimeEntry): string[] => {
+    if (entry.works && entry.works.length > 0) return entry.works;
+    return entry.work ? [entry.work] : [''];
+  };
+
+  // Update specific work item in the numbered list
+  const handleUpdateWorkItem = (
+    dayId: string,
+    entryId: string,
+    workIndex: number,
+    value: string
+  ) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      return {
+        ...d,
+        entries: d.entries.map((entry) => {
+          if (entry.id !== entryId) return entry;
+          const currentWorks = getWorksList(entry);
+          const newWorks = [...currentWorks];
+          newWorks[workIndex] = value;
+          return {
+            ...entry,
+            work: newWorks.filter(Boolean).join('; '),
+            works: newWorks,
+          };
+        }),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Add another numbered work item to the session
+  const handleAddWorkItem = (dayId: string, entryId: string) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      return {
+        ...d,
+        entries: d.entries.map((entry) => {
+          if (entry.id !== entryId) return entry;
+          const currentWorks = getWorksList(entry);
+          const newWorks = [...currentWorks, ''];
+          return {
+            ...entry,
+            works: newWorks,
+          };
+        }),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Remove a numbered work item
+  const handleRemoveWorkItem = (dayId: string, entryId: string, workIndex: number) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      return {
+        ...d,
+        entries: d.entries.map((entry) => {
+          if (entry.id !== entryId) return entry;
+          const currentWorks = getWorksList(entry);
+          const newWorks = currentWorks.filter((_, idx) => idx !== workIndex);
+          const finalWorks = newWorks.length > 0 ? newWorks : [''];
+          return {
+            ...entry,
+            work: finalWorks.filter(Boolean).join('; '),
+            works: finalWorks,
+          };
+        }),
+      };
+    });
+    saveDays(updated);
+  };
+
   // Delete a Time Entry
   const handleDeleteEntry = (dayId: string, entryId: string) => {
     const updated = days.map((d) => {
@@ -210,12 +285,20 @@ export default function ID2950Page() {
     setIsAddingMonth(false);
   };
 
-  // Copy day entries to clipboard as clean text (with notes)
+  // Copy day entries to clipboard as clean text (with multiple numbered works & notes)
   const handleCopyDay = (day: DayLog) => {
-    let text = `${day.name} (${day.month})\n`;
+    let text = `${day.name || 'Untitled Day'} (${day.month})\n`;
     text += '====================================\n';
     day.entries.forEach((e) => {
-      text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${e.work || '(no work specified)'}\n`;
+      const works = getWorksList(e).filter((w) => w.trim().length > 0);
+      if (works.length > 1) {
+        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}]\n`;
+        works.forEach((w, i) => {
+          text += `   ${i + 1}. ${w}\n`;
+        });
+      } else {
+        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${works[0] || e.work || '(no work specified)'}\n`;
+      }
       if (e.notes && e.notes.trim()) {
         const indentedNotes = e.notes
           .split('\n')
@@ -470,17 +553,50 @@ export default function ID2950Page() {
                           />
                         </div>
 
-                        {/* What Work I Do Box */}
-                        <div className="col-span-6 lg:col-span-6">
-                          <input
-                            type="text"
-                            placeholder="What work I do..."
-                            value={entry.work}
-                            onChange={(e) =>
-                              handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
-                            }
-                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-neutral-200 outline-none transition"
-                          />
+                        {/* What Work I Do Box (Multiple Numbered Works Supported) */}
+                        <div className="col-span-6 lg:col-span-6 space-y-2">
+                          {getWorksList(entry).map((workItem, wIdx, arr) => (
+                            <div key={wIdx} className="flex items-center gap-2">
+                              <span className="text-[11px] font-mono font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 min-w-[26px] text-center select-none flex-shrink-0">
+                                {wIdx + 1}.
+                              </span>
+                              <input
+                                type="text"
+                                placeholder={`What work I do #${wIdx + 1}...`}
+                                value={workItem}
+                                onChange={(e) =>
+                                  handleUpdateWorkItem(day.id, entry.id, wIdx, e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddWorkItem(day.id, entry.id);
+                                  }
+                                }}
+                                className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-neutral-200 outline-none transition"
+                              />
+                              {arr.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveWorkItem(day.id, entry.id, wIdx)}
+                                  className="text-neutral-500 hover:text-rose-400 p-1.5 text-xs rounded transition flex-shrink-0"
+                                  title={`Remove work #${wIdx + 1}`}
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddWorkItem(day.id, entry.id)}
+                            className="text-[11px] font-mono text-neutral-500 hover:text-neutral-300 flex items-center gap-1 transition pl-1 py-0.5"
+                            title="Add multiple work items in this time slot (e.g. 3:00 - 4:00)"
+                          >
+                            <Plus className="w-3 h-3 text-neutral-500" />
+                            <span>+ Add work #{getWorksList(entry).length + 1}</span>
+                          </button>
                         </div>
 
                         {/* Dropable Notes Toggle Button */}
@@ -577,20 +693,47 @@ export default function ID2950Page() {
                           </div>
                         </div>
 
-                        {/* What Work I Do on mobile */}
-                        <div>
-                          <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
-                            What work I do
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="What work I do..."
-                            value={entry.work}
-                            onChange={(e) =>
-                              handleUpdateEntry(day.id, entry.id, 'work', e.target.value)
-                            }
-                            className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none"
-                          />
+                        {/* What Work I Do on mobile (with numbered works) */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] uppercase font-mono text-neutral-500 block">
+                              What work I do
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleAddWorkItem(day.id, entry.id)}
+                              className="text-[10px] font-mono text-neutral-400 hover:text-white flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>Add work #{getWorksList(entry).length + 1}</span>
+                            </button>
+                          </div>
+
+                          {getWorksList(entry).map((workItem, wIdx, arr) => (
+                            <div key={wIdx} className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-mono font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 rounded-md px-1.5 py-1 min-w-[22px] text-center select-none flex-shrink-0">
+                                {wIdx + 1}.
+                              </span>
+                              <input
+                                type="text"
+                                placeholder={`Work item #${wIdx + 1}...`}
+                                value={workItem}
+                                onChange={(e) =>
+                                  handleUpdateWorkItem(day.id, entry.id, wIdx, e.target.value)
+                                }
+                                className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-3 py-2 text-xs text-neutral-200 outline-none"
+                              />
+                              {arr.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveWorkItem(day.id, entry.id, wIdx)}
+                                  className="text-neutral-500 hover:text-rose-400 p-1 text-xs"
+                                >
+                                  ✕
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
 
