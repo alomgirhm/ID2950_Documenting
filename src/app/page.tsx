@@ -14,9 +14,11 @@ import {
   ChevronDown, 
   ChevronUp,
   Sparkles,
-  Download
+  Download,
+  Smartphone,
+  ClipboardPaste
 } from 'lucide-react';
-import { DayLog, TimeEntry } from '@/types';
+import { DayLog, TimeEntry, AppUsageItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF } from '@/lib/pdfExport';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
@@ -121,6 +123,9 @@ export default function ID2950Page() {
   const [editingDayName, setEditingDayName] = useState<string>('');
   const [copiedDayId, setCopiedDayId] = useState<string | null>(null);
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [expandedWellbeing, setExpandedWellbeing] = useState<Record<string, boolean>>({});
+  const [pasteWellbeingDayId, setPasteWellbeingDayId] = useState<string | null>(null);
+  const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Load from localStorage on mount
@@ -378,6 +383,103 @@ export default function ID2950Page() {
     setIsAddingMonth(false);
   };
 
+  // Toggle Digital Wellbeing screen time drawer
+  const toggleWellbeing = (dayId: string) => {
+    setExpandedWellbeing((prev) => ({
+      ...prev,
+      [dayId]: !prev[dayId],
+    }));
+  };
+
+  // Add a new App Screen Time item
+  const handleAddAppUsage = (dayId: string) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.appUsage || [];
+      const newItem: AppUsageItem = {
+        id: `app-${Date.now()}`,
+        appName: '',
+        duration: '',
+      };
+      return {
+        ...d,
+        appUsage: [...current, newItem],
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Update an App Screen Time item
+  const handleUpdateAppUsage = (
+    dayId: string,
+    appId: string,
+    field: 'appName' | 'duration',
+    value: string
+  ) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.appUsage || [];
+      return {
+        ...d,
+        appUsage: current.map((a) =>
+          a.id === appId ? { ...a, [field]: value } : a
+        ),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Remove an App Screen Time item
+  const handleRemoveAppUsage = (dayId: string, appId: string) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.appUsage || [];
+      return {
+        ...d,
+        appUsage: current.filter((a) => a.id !== appId),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Parse and import text from Samsung Wellbeing / MacroDroid
+  const handleParseAndImportWellbeing = (dayId: string, text: string) => {
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parsed: AppUsageItem[] = [];
+
+    lines.forEach((line) => {
+      // Matches formats like "YouTube: 1h 45m" or "YouTube - 45m" or "YouTube 1h 45m"
+      const match = line.match(/^([^:-]+)[:\-\t]+(.+)$/);
+      if (match) {
+        parsed.push({
+          id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          appName: match[1].trim(),
+          duration: match[2].trim(),
+        });
+      } else {
+        parsed.push({
+          id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          appName: line,
+          duration: '',
+        });
+      }
+    });
+
+    if (parsed.length > 0) {
+      const updated = days.map((d) => {
+        if (d.id !== dayId) return d;
+        const current = d.appUsage || [];
+        return {
+          ...d,
+          appUsage: [...current, ...parsed],
+        };
+      });
+      saveDays(updated);
+      setPasteWellbeingDayId(null);
+      setPasteWellbeingText('');
+    }
+  };
+
   // Copy day entries to clipboard as clean text (with multiple numbered works & notes)
   const handleCopyDay = (day: DayLog) => {
     let text = `${day.name || 'Untitled Day'} (${day.month})\n`;
@@ -400,6 +502,17 @@ export default function ID2950Page() {
         text += `${indentedNotes}\n`;
       }
     });
+
+    if (day.appUsage && day.appUsage.length > 0) {
+      const valid = day.appUsage.filter((a) => a.appName.trim());
+      if (valid.length > 0) {
+        text += '\n📱 Mobile Screen Time (Digital Wellbeing):\n';
+        valid.forEach((a) => {
+          text += `   • ${a.appName}: ${a.duration || '0m'}\n`;
+        });
+      }
+    }
+
     navigator.clipboard.writeText(text).then(() => {
       setCopiedDayId(day.id);
       setTimeout(() => setCopiedDayId(null), 2000);
@@ -887,20 +1000,163 @@ export default function ID2950Page() {
                 })}
               </div>
 
-              {/* Add Time Entry Button under Day */}
-              <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-neutral-850/60 flex items-center justify-between">
-                <button
-                  onClick={() => handleAddTimeEntry(day.id)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 hover:text-white px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition shadow-sm"
-                >
-                  <Plus className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>Add Time Block</span>
-                </button>
+              {/* Day Bottom Actions */}
+              <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-neutral-850/60 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleAddTimeEntry(day.id)}
+                    className="flex items-center gap-1.5 text-xs font-medium text-neutral-300 hover:text-white px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition shadow-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>Add Time Block</span>
+                  </button>
+
+                  {/* Toggle Mobile Digital Wellbeing Drawer */}
+                  <button
+                    onClick={() => toggleWellbeing(day.id)}
+                    className={`flex items-center gap-1.5 text-xs font-medium px-3.5 py-2 rounded-xl border transition shadow-sm ${
+                      (day.appUsage && day.appUsage.length > 0) || !!expandedWellbeing[day.id]
+                        ? 'bg-neutral-900 border-neutral-700 text-neutral-100'
+                        : 'bg-neutral-950 hover:bg-neutral-850 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                    title="Track daily mobile screen time from Samsung Wellbeing"
+                  >
+                    <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Mobile Screen Time</span>
+                    {day.appUsage && day.appUsage.length > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
+                        {day.appUsage.length} apps
+                      </span>
+                    )}
+                  </button>
+                </div>
 
                 <span className="text-[11px] text-neutral-600 font-mono">
                   Auto-saved
                 </span>
               </div>
+
+              {/* Digital Wellbeing Drawer */}
+              {expandedWellbeing[day.id] && (
+                <div className="mt-4 pt-4 border-t border-neutral-850/80 bg-neutral-950/60 rounded-xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-neutral-850">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="w-4 h-4 text-indigo-400" />
+                      <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                        Mobile App Screen Time (Samsung Wellbeing)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAddAppUsage(day.id)}
+                        className="flex items-center gap-1 text-[11px] text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition"
+                      >
+                        <Plus className="w-3 h-3 text-neutral-400" />
+                        <span>Add App</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPasteWellbeingDayId(
+                            pasteWellbeingDayId === day.id ? null : day.id
+                          );
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition"
+                        title="Paste screen time text directly from Samsung Wellbeing or MacroDroid"
+                      >
+                        <ClipboardPaste className="w-3 h-3 text-indigo-400" />
+                        <span>Paste / Import</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Paste Modal / Textarea */}
+                  {pasteWellbeingDayId === day.id && (
+                    <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2 animate-fadeIn">
+                      <label className="text-[11px] font-mono text-neutral-400 block">
+                        Paste app usage text (e.g. "YouTube: 1h 45m" or "Chrome: 30m"):
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={pasteWellbeingText}
+                        onChange={(e) => setPasteWellbeingText(e.target.value)}
+                        placeholder="YouTube: 1h 45m&#10;Kindle: 50m&#10;Chrome: 30m"
+                        className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-lg p-2.5 text-xs text-neutral-200 outline-none font-mono"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPasteWellbeingDayId(null)}
+                          className="px-2.5 py-1 text-xs text-neutral-400 hover:text-neutral-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleParseAndImportWellbeing(day.id, pasteWellbeingText)
+                          }
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
+                        >
+                          Import Apps
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* App Usage Rows */}
+                  {(!day.appUsage || day.appUsage.length === 0) ? (
+                    <p className="text-xs text-neutral-500 py-3 text-center font-mono">
+                      No mobile apps tracked for this day yet. Click "+ Add App" or "Paste / Import".
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {day.appUsage.map((app) => (
+                        <div
+                          key={app.id}
+                          className="flex items-center gap-2 p-2 rounded-xl bg-neutral-900 border border-neutral-800"
+                        >
+                          <input
+                            type="text"
+                            placeholder="App Name (e.g. YouTube)"
+                            value={app.appName}
+                            onChange={(e) =>
+                              handleUpdateAppUsage(day.id, app.id, 'appName', e.target.value)
+                            }
+                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-neutral-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Duration (e.g. 1h 30m)"
+                            value={app.duration}
+                            onChange={(e) =>
+                              handleUpdateAppUsage(day.id, app.id, 'duration', e.target.value)
+                            }
+                            className="w-28 bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-neutral-200 outline-none text-center"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveAppUsage(day.id, app.id)}
+                            className="text-neutral-500 hover:text-rose-400 p-1 text-xs"
+                            title="Remove app"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Sync Instructions Hint */}
+                  <div className="pt-2 text-[10px] text-neutral-500 font-mono flex items-center justify-between">
+                    <span>Included in daily PDF report</span>
+                    <span>Local API: POST /api/wellbeing</span>
+                  </div>
+                </div>
+              )}
             </section>
           ))
         )}

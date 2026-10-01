@@ -144,6 +144,36 @@ export function downloadDayPDF(day: DayLog) {
     y += totalBlockHeight;
   });
 
+  // Digital Wellbeing App Screen Time section in PDF
+  if (day.appUsage && day.appUsage.length > 0) {
+    const validApps = day.appUsage.filter((a) => a.appName.trim().length > 0);
+    if (validApps.length > 0) {
+      const wellbeingBoxHeight = 12 + validApps.length * 5.5;
+      checkPageBreak(wellbeingBoxHeight + 8);
+      y += 2;
+      doc.setFillColor(245, 247, 250);
+      doc.setDrawColor(220, 225, 230);
+      doc.roundedRect(margin, y, contentWidth, wellbeingBoxHeight, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(30, 35, 45);
+      doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+
+      let appY = y + 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(60, 65, 75);
+
+      validApps.forEach((app) => {
+        doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+        appY += 5;
+      });
+
+      y += wellbeingBoxHeight + 4;
+    }
+  }
+
   // Footer on last page
   checkPageBreak(15);
   y = Math.min(y + 6, pageHeight - 12);

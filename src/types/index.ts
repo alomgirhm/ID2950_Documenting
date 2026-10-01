@@ -7,9 +7,16 @@ export interface TimeEntry {
   notes?: string;    // collapsible notes / learnings from video, book, or work
 }
 
+export interface AppUsageItem {
+  id: string;
+  appName: string; // e.g. "YouTube", "Kindle", "Chrome"
+  duration: string; // e.g. "1h 45m" or "35m"
+}
+
 export interface DayLog {
   id: string;
   name: string;      // user-defined day name, e.g. "2 October 2026"
   month: string;     // user-defined month, e.g. "October 2026"
   entries: TimeEntry[];
+  appUsage?: AppUsageItem[]; // Digital Wellbeing screen time
 }
