@@ -38,27 +38,41 @@ const DEFAULT_DAYS: DayLog[] = [
   },
 ];
 
-// Automatically formats time on input: e.g. typing "4" instantly becomes "4:00"
-function formatTimeOnInput(val: string): string {
-  const trimmed = val.trim();
+// Automatically appends ":" after typing the hour (1..12 or 13..24)
+// so the user does NOT have to type the colon, while allowing any minutes like 3:30 or 4:00
+function formatTimeAutoColon(newVal: string, prevVal: string): string {
+  // If user is deleting (backspace), do not auto-append colon
+  if (newVal.length < prevVal.length) {
+    return newVal;
+  }
+
+  const trimmed = newVal.trim();
   if (!trimmed) return '';
 
-  // If user typed a single digit 3-9: e.g. "4" -> "4:00"
+  // If already contains colon, keep and sanitize
+  if (trimmed.includes(':')) {
+    const parts = trimmed.split(':');
+    if (parts.length > 2) {
+      return `${parts[0]}:${parts[1]}`;
+    }
+    // Limit minutes to 2 digits max e.g. "3:30"
+    if (parts[1] && parts[1].length > 2) {
+      return `${parts[0]}:${parts[1].slice(0, 2)}`;
+    }
+    return trimmed;
+  }
+
+  // Single digit 3 to 9: typing "3" -> "3:", "4" -> "4:", "9" -> "9:"
   if (/^[3-9]$/.test(trimmed)) {
-    return `${trimmed}:00`;
+    return `${trimmed}:`;
   }
 
-  // If user typed "10", "11", "12", "13".."24" -> "10:00"
-  if (/^(1[0-9]|2[0-4])$/.test(trimmed)) {
-    return `${trimmed}:00`;
+  // Two digits: 10, 11, 12 (or 13..24, or 01..09) -> "10:", "11:", "12:"
+  if (/^(0[1-9]|1[0-9]|2[0-4])$/.test(trimmed)) {
+    return `${trimmed}:`;
   }
 
-  // If user typed e.g. "4:" or "1:" -> "4:00"
-  if (/^(\d{1,2}):$/.test(trimmed)) {
-    return `${trimmed}00`;
-  }
-
-  // If user typed e.g. "430" -> "4:30"
+  // If user typed 1 followed by minutes like 30 (e.g. "130" -> "1:30")
   if (/^([1-9])([0-5]\d)$/.test(trimmed)) {
     return `${trimmed[0]}:${trimmed.slice(1)}`;
   }
@@ -68,40 +82,30 @@ function formatTimeOnInput(val: string): string {
     return `${trimmed.slice(0, 2)}:${trimmed.slice(2)}`;
   }
 
-  return val;
+  return trimmed;
 }
 
-// Formats time on blur: e.g. "1" -> "1:00", "2" -> "2:00", "4:3" -> "4:30"
+// On blur, only format if user left an unfinished hour like "3:" or "1"
 function formatTimeOnBlur(val: string): string {
   const trimmed = val.trim();
   if (!trimmed) return '';
 
-  // Already standard format e.g. "4:00", "14:30"
+  // Already standard format e.g. "3:30", "4:00"
   if (/^\d{1,2}:\d{2}$/.test(trimmed)) return trimmed;
 
-  // Single digit (including 1 or 2) or double digit: e.g. "1" -> "1:00", "2" -> "2:00", "4" -> "4:00"
+  // Single or double digit left without colon e.g. "1" or "2"
   if (/^\d{1,2}$/.test(trimmed)) {
     return `${trimmed}:00`;
   }
 
-  // e.g. "4:" -> "4:00"
+  // Trailing colon left without minutes e.g. "3:" -> "3:00"
   if (/^\d{1,2}:$/.test(trimmed)) {
     return `${trimmed}00`;
   }
 
-  // e.g. "4:3" -> "4:30"
+  // Single minute digit e.g. "3:3" -> "3:30"
   if (/^\d{1,2}:\d$/.test(trimmed)) {
     return `${trimmed}0`;
-  }
-
-  // e.g. "430" -> "4:30"
-  if (/^([1-9])([0-5]\d)$/.test(trimmed)) {
-    return `${trimmed[0]}:${trimmed.slice(1)}`;
-  }
-
-  // e.g. "1030" -> "10:30"
-  if (/^(\d{2})([0-5]\d)$/.test(trimmed)) {
-    return `${trimmed.slice(0, 2)}:${trimmed.slice(2)}`;
   }
 
   return trimmed;
@@ -257,7 +261,7 @@ export default function ID2950Page() {
     saveDays(updated);
   };
 
-  // Handle start and end time inputs with automatic :00 completion
+  // Handle start and end time inputs with automatic colon (e.g. typing 3 -> 3:, 10 -> 10:)
   const handleUpdateTime = (
     dayId: string,
     entryId: string,
@@ -272,10 +276,7 @@ export default function ID2950Page() {
       const currentDay = days.find((d) => d.id === dayId);
       const currentEntry = currentDay?.entries.find((e) => e.id === entryId);
       const prevVal = currentEntry ? currentEntry[field] : '';
-      // Only auto-expand if user is typing (length increasing)
-      if (rawVal.length > prevVal.length) {
-        finalVal = formatTimeOnInput(rawVal);
-      }
+      finalVal = formatTimeAutoColon(rawVal, prevVal);
     }
     handleUpdateEntry(dayId, entryId, field, finalVal);
   };
