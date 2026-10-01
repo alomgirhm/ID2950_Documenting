@@ -1,59 +1,38 @@
-# ID2950 — Daily Productivity & Self-Development Operating System
+# ID2950 — Minimalist Self-Assigned Day & Productivity Logger
 
-**ID2950** is a modern Next.js application designed to document and audit your entire day, track productivity, and align daily hours with high-leverage self-development projects.
+A clean, minimalist Next.js application designed for total control over how you document your day. 
 
----
-
-## ⚡ Core Features
-
-### 1. ⏱️ 24-Hour Time Logging & Timeline
-- **Hourly Logging:** Log blocks like `09:00 - 10:00 --- Book reading`, `10:15 - 12:30 --- Next.js Architecture`, etc.
-- **Categorization:** Reading, Coding, Deep Work, Fitness, Mindfulness, Learning, Personal, and Rest.
-- **Focus Rating:** 1 to 5 stars for every block to evaluate deep focus vs shallow work.
-- **Quick Presets:** 1-click presets for reading sessions, coding sprints, and deep work blocks.
-- **Notes & Key Insights:** Capture takeaways, page counts, or learnings directly on each block.
-
-### 2. 🎯 Self-Development Project Management
-- Link time blocks directly to active long-term goals (e.g., *"Daily Book Reading & Notes"*, *"ID2950 Application Engineering"*, *"Peak Fitness & Longevity"*).
-- Automatic calculation of logged hours vs. target hours.
-- Interactive milestone checklists for each project track.
-- Create new self-development tracks anytime.
-
-### 3. 📊 Daily Productivity Analytics & Stats
-- Real-time calculation of **Productive Focus Hours** vs. total day hours.
-- Active habit streak counters (Reading, Coding, Workouts).
-- Block completion percentage and day focus quality rating.
-
-### 4. 🧘 Daily Intentions & Evening Reflection
-- **Morning Top 3 Priorities:** Checkable high-priority daily objectives.
-- **Vital Habits Tracker:** Water intake (8-glass visual tracker), Sleep hours slider, and Energy / Mood selector.
-- **Evening Review:** Document "Wins & Breakthroughs", "1% Improvements for Tomorrow", and Overall Day Score (0-100%).
-
-### 5. ⏳ Focus Sprint Pomodoro / Stopwatch
-- Built-in timer for 15m Reading Sprints, 25m Pomodoro, 50m Deep Work, and 5m Breaks.
-- Audio chime and confetti celebration upon session completion.
-
-### 6. 📋 Export & Backup
-- **One-Click Markdown Export:** Copies a formatted daily summary markdown table directly to your clipboard for your Obsidian / Notion / Journal notes.
-- **Local Persistence:** All logs, projects, and reflections persist automatically in your browser (`localStorage`).
+Instead of being bound to rigid 12:00 AM midnight system clocks, **all months, day names, and times are self-assigned by you** (ideal for starting your day at sunset, dawn, or any rhythm you choose).
 
 ---
 
-## 🚀 Getting Started
+## 🌟 How It Works
 
-To launch ID2950 in development mode:
+1. **Simple Month Management:**
+   - Group your days under custom months (e.g., `October 2026`).
+   - Switch months or create new ones anytime.
 
-```bash
+2. **Self-Assigned Days:**
+   - Add new days with any custom name you want (e.g. `2 October 2026`, `Sunset Day 1`, `Day 2: Deep Sprint`).
+   - Click the edit icon to rename any day directly.
+   - Delete any day with one click.
+
+3. **Under Every Day:**
+   - **Start Time Box:** Type your custom start time (e.g., `9:00`, `18:30`, `Sunset`).
+   - **End Time Box:** Type your custom end time (e.g., `10:00`, `20:00`).
+   - **What Work I Do Box:** Type the activity or project (e.g., `Book reading`, `Self development project`, `Coding Next.js`).
+   - **+ Add Time Block:** Click to easily add more rows under that day.
+   - **Delete row:** Click `✕` to remove any entry.
+
+4. **Auto-Persistence:**
+   - Automatically saves every keystroke and change to your browser (`localStorage`).
+
+---
+
+## 🚀 Running the App
+
+```powershell
 npm run dev
 ```
 
-Then open your browser and navigate to:
-```
-http://localhost:3000
-```
-
-To create an optimized production build:
-```bash
-npm run build
-npm run start
-```
+Then visit **`http://localhost:3000`** in your browser.
