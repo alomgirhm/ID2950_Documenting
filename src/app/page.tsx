@@ -13,9 +13,11 @@ import {
   FileText, 
   ChevronDown, 
   ChevronUp,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 import { DayLog, TimeEntry } from '@/types';
+import { downloadDayPDF, downloadSingleSessionPDF } from '@/lib/pdfExport';
 
 const STORAGE_KEY = 'id2950_minimal_days_v2';
 
@@ -411,6 +413,16 @@ export default function ID2950Page() {
                       )}
                     </button>
 
+                    {/* Download Day PDF */}
+                    <button
+                      onClick={() => downloadDayPDF(day)}
+                      className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
+                      title="Download Full Day Report as PDF"
+                    >
+                      <Download className="w-3.5 h-3.5 text-neutral-400" />
+                      <span className="text-[11px] hidden sm:inline">PDF</span>
+                    </button>
+
                     {/* Delete Day */}
                     <button
                       onClick={() => handleDeleteDay(day.id)}
@@ -621,6 +633,24 @@ export default function ID2950Page() {
                             placeholder="Write your learnings, takeaways, key timestamps, or video insights here... (e.g. • Only need 2 people + 90 days to test PMF...)"
                             className="w-full bg-neutral-900/90 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-neutral-200 outline-none leading-relaxed resize-y min-h-[75px]"
                           />
+
+                          {/* Session PDF Action & Metadata */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2.5 mt-1 border-t border-neutral-850/60">
+                            <span className="text-[11px] text-neutral-400 font-mono flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              Completed Session: {entry.startTime || '--:--'} — {entry.endTime || '--:--'} | {day.name}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => downloadSingleSessionPDF(day, entry)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-200 hover:text-white text-xs font-medium transition shadow-sm self-start sm:self-auto"
+                              title="Download this session's notes as a PDF document"
+                            >
+                              <Download className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Download Session PDF</span>
+                            </button>
+                          </div>
                         </div>
                       )}
 
