@@ -14,6 +14,84 @@ function getFormattedWorkLines(entry: TimeEntry): string {
 }
 
 /**
+ * Renders the Quranic verse from Surah An-Najm 53:39 onto an offscreen canvas
+ * with high-DPI Bengali typography and returns a crisp PNG data URL.
+ */
+function createQuranVerseImage(): string | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const canvas = document.createElement('canvas');
+    const dpr = 3;
+    const w = 620;
+    const h = 82;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.scale(dpr, dpr);
+
+    // Background card with subtle border
+    ctx.fillStyle = '#FBFBFA';
+    ctx.strokeStyle = '#E8E6E3';
+    ctx.lineWidth = 1;
+
+    // Rounded rectangle
+    const r = 8;
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(w - r, 0);
+    ctx.quadraticCurveTo(w, 0, w, r);
+    ctx.lineTo(w, h - r);
+    ctx.quadraticCurveTo(w, h, w - r, h);
+    ctx.lineTo(r, h);
+    ctx.quadraticCurveTo(0, h, 0, h - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Amber gold vertical decorative strip on left
+    ctx.fillStyle = '#D97706';
+    ctx.beginPath();
+    if (typeof (ctx as any).roundRect === 'function') {
+      (ctx as any).roundRect(0, 0, 4.5, h, [r, 0, 0, r]);
+    } else {
+      ctx.rect(0, 0, 4.5, h);
+    }
+    ctx.fill();
+
+    // 1. "আল্লাহ বলেন:"
+    ctx.fillStyle = '#B45309'; // amber-700
+    ctx.font = 'bold 12.5px "Nirmala UI", "Kalpurush", "Vrinda", "Segoe UI", sans-serif';
+    ctx.fillText('আল্লাহ বলেন:', 16, 22);
+
+    // 2. Main Verse: “মানুষের জন্য সে-ই আছে, যার জন্য সে চেষ্টা করে।”
+    ctx.fillStyle = '#1C1917'; // warm dark text
+    ctx.font = 'bold 15px "Nirmala UI", "Kalpurush", "Vrinda", "Segoe UI", sans-serif';
+    ctx.fillText('“মানুষের জন্য সে-ই আছে, যার জন্য সে চেষ্টা করে।”', 16, 46);
+
+    // 3. Reference: — সূরা আন-নাজম ৫৩:৩৯
+    ctx.fillStyle = '#78716C'; // stone-500
+    ctx.font = '11.5px "Nirmala UI", "Kalpurush", "Vrinda", "Segoe UI", sans-serif';
+    ctx.fillText('— সূরা আন-নাজম ৫৩:৩৯', 16, 68);
+
+    // English translation on right side
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#A8A29E';
+    ctx.font = 'italic 10px "Segoe UI", sans-serif';
+    ctx.fillText('"And that there is for man only that for which he strives." (53:39)', w - 16, 68);
+
+    return canvas.toDataURL('image/png');
+  } catch (err) {
+    console.error('Error generating verse image:', err);
+    return null;
+  }
+}
+
+/**
  * Downloads a clean, beautifully formatted PDF report for an entire day,
  * including all sessions, time ranges, multiple numbered works, and dropable notes/learnings.
  */
@@ -34,7 +112,9 @@ export function downloadDayPDF(day: DayLog) {
     if (y + neededHeight > pageHeight - margin) {
       doc.addPage();
       y = margin;
+      return true;
     }
+    return false;
   };
 
   // 1. Header Banner
@@ -77,71 +157,92 @@ export function downloadDayPDF(day: DayLog) {
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
 
-  y += 7;
+  y += 6;
+
+  // Quranic Verse Card
+  const verseImg = createQuranVerseImage();
+  if (verseImg) {
+    const verseHeight = 22;
+    checkPageBreak(verseHeight + 6);
+    doc.addImage(verseImg, 'PNG', margin, y, contentWidth, verseHeight);
+    y += verseHeight + 6;
+  }
 
   // 3. Loop over all time blocks / sessions
-  day.entries.forEach((entry) => {
+  day.entries.forEach((entry, index) => {
     const timeText = `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
     const workText = getFormattedWorkLines(entry);
     const notesText = entry.notes?.trim() || '';
 
-    const splitWork = doc.splitTextToSize(workText, contentWidth - 45);
-    const workHeight = splitWork.length * 5.2;
+    // Measure Work Text accurately with bold 9.5pt font across full card width
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
+    const workHeight = splitWork.length * 4.8;
 
+    // Measure Notes Text accurately with normal 8.5pt font
     let notesHeight = 0;
     let splitNotes: string[] = [];
     if (notesText) {
-      doc.setFontSize(9);
-      splitNotes = doc.splitTextToSize(notesText, contentWidth - 10);
-      notesHeight = 8 + splitNotes.length * 4.5 + 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      splitNotes = doc.splitTextToSize(notesText, contentWidth - 12);
+      notesHeight = 7 + splitNotes.length * 4.2 + 3;
     }
 
-    const totalBlockHeight = Math.max(16, workHeight + 10) + notesHeight + 6;
-    checkPageBreak(totalBlockHeight);
+    const totalBlockHeight = 13 + workHeight + notesHeight + 4;
+    checkPageBreak(totalBlockHeight + 4);
 
-    // Entry Box Background
-    doc.setFillColor(248, 249, 250);
-    doc.setDrawColor(225, 230, 235);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(margin, y, contentWidth, totalBlockHeight - 4, 2, 2, 'FD');
+    // 1. Entry Card Box Background
+    doc.setFillColor(250, 250, 252);
+    doc.setDrawColor(226, 230, 236);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-    // Entry Header: Time badge
+    // 2. Top Header inside Card: Time badge
     doc.setFillColor(30, 35, 45);
-    doc.roundedRect(margin + 3, y + 3, 34, 7, 1.5, 1.5, 'F');
+    doc.roundedRect(margin + 4, y + 3.5, 34, 6.5, 1.5, 1.5, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(255, 255, 255);
-    doc.text(timeText, margin + 4.5, y + 7.5);
+    doc.text(timeText, margin + 5.5, y + 7.8);
 
-    // Work Title (handles multiple numbered lines)
+    // Session index label on the right
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(140, 145, 155);
+    doc.text(`Session #${index + 1}`, margin + contentWidth - 22, y + 7.8);
+
+    // 3. Work description (Full width, padded on both sides, NEVER overflows)
+    const workStartY = y + 15;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(25, 25, 30);
-    doc.text(splitWork, margin + 41, y + 7.5);
+    doc.text(splitWork, margin + 5, workStartY);
 
-    let currentBlockY = y + Math.max(12, workHeight + 7);
+    let currentBlockY = workStartY + workHeight + 1.5;
 
-    // Notes / Learnings section inside the card
+    // 4. Notes / Learnings section inside the card
     if (notesText) {
-      doc.setDrawColor(230, 232, 238);
+      doc.setDrawColor(230, 233, 238);
       doc.setLineWidth(0.2);
-      doc.line(margin + 4, currentBlockY, margin + contentWidth - 4, currentBlockY);
-      currentBlockY += 4;
+      doc.line(margin + 5, currentBlockY, margin + contentWidth - 5, currentBlockY);
+      currentBlockY += 3.5;
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(180, 100, 10); // subtle amber
-      doc.text('LEARNINGS & SESSION NOTES:', margin + 4, currentBlockY);
+      doc.setFontSize(8);
+      doc.setTextColor(180, 100, 10); // warm amber
+      doc.text('LEARNINGS & SESSION NOTES:', margin + 5, currentBlockY);
 
-      currentBlockY += 4.5;
+      currentBlockY += 4;
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setTextColor(45, 50, 60);
-      doc.text(splitNotes, margin + 4, currentBlockY);
+      doc.text(splitNotes, margin + 5, currentBlockY);
     }
 
-    y += totalBlockHeight;
+    y += totalBlockHeight + 4;
   });
 
   // Digital Wellbeing App Screen Time section in PDF
@@ -244,56 +345,64 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
 
-  y += 10;
+  y += 6;
+
+  // Quranic Verse Card
+  const verseImg = createQuranVerseImage();
+  if (verseImg) {
+    const verseHeight = 22;
+    doc.addImage(verseImg, 'PNG', margin, y, contentWidth, verseHeight);
+    y += verseHeight + 6;
+  }
 
   // Time Box
   doc.setFillColor(248, 249, 250);
   doc.setDrawColor(225, 230, 235);
-  doc.roundedRect(margin, y, contentWidth, 20, 2, 2, 'FD');
+  doc.roundedRect(margin, y, contentWidth, 18, 2, 2, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(100, 105, 115);
-  doc.text('SCHEDULED SESSION TIME:', margin + 4, y + 6.5);
+  doc.text('SCHEDULED SESSION TIME:', margin + 4, y + 5.5);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(25, 30, 45);
-  doc.text(`${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}`, margin + 4, y + 13.5);
+  doc.text(`${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}`, margin + 4, y + 12.5);
 
-  y += 28;
+  y += 24;
 
   // Work description (handles multiple numbered items)
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setTextColor(90, 95, 105);
   doc.text('WORK COMPLETED IN THIS SESSION:', margin, y);
 
-  y += 6;
+  y += 5.5;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setTextColor(20, 20, 25);
   const workText = getFormattedWorkLines(entry);
   const splitWork = doc.splitTextToSize(workText, contentWidth);
   doc.text(splitWork, margin, y);
 
-  y += splitWork.length * 6 + 10;
+  y += splitWork.length * 5.2 + 8;
 
   // Notes & Learnings
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setTextColor(180, 100, 10);
   doc.text('LEARNINGS, INSIGHTS & NOTES:', margin, y);
 
-  y += 6;
+  y += 5.5;
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.setTextColor(40, 45, 55);
   const notesText = entry.notes?.trim() || '(No notes logged for this session)';
   const splitNotes = doc.splitTextToSize(notesText, contentWidth);
   doc.text(splitNotes, margin, y);
 
-  y += splitNotes.length * 5.5 + 20;
+  y += splitNotes.length * 5 + 16;
 
   // Footer
   doc.setFont('helvetica', 'italic');
@@ -379,7 +488,16 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
 
-  y += 8;
+  y += 6;
+
+  // Quranic Verse Card on first page
+  const verseImg = createQuranVerseImage();
+  if (verseImg) {
+    const verseHeight = 22;
+    checkPageBreak(verseHeight + 6);
+    doc.addImage(verseImg, 'PNG', margin, y, contentWidth, verseHeight);
+    y += verseHeight + 6;
+  }
 
   // 3. Loop through each day
   selectedDays.forEach((day, dayIndex) => {
@@ -428,67 +546,79 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       doc.text('(No time blocks logged for this day)', margin + 4, y);
       y += 8;
     } else {
-      day.entries.forEach((entry) => {
+      day.entries.forEach((entry, index) => {
         const timeText = `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
         const workText = getFormattedWorkLines(entry);
         const notesText = entry.notes?.trim() || '';
 
-        const splitWork = doc.splitTextToSize(workText, contentWidth - 45);
-        const workHeight = splitWork.length * 5.2;
+        // Measure Work Text accurately with bold 9.5pt font
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
+        const workHeight = splitWork.length * 4.8;
 
+        // Measure Notes Text accurately with normal 8.5pt font
         let notesHeight = 0;
         let splitNotes: string[] = [];
         if (notesText) {
-          doc.setFontSize(9);
-          splitNotes = doc.splitTextToSize(notesText, contentWidth - 10);
-          notesHeight = 8 + splitNotes.length * 4.5 + 4;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8.5);
+          splitNotes = doc.splitTextToSize(notesText, contentWidth - 12);
+          notesHeight = 7 + splitNotes.length * 4.2 + 3;
         }
 
-        const totalBlockHeight = Math.max(16, workHeight + 10) + notesHeight + 6;
-        checkPageBreak(totalBlockHeight);
+        const totalBlockHeight = 13 + workHeight + notesHeight + 4;
+        checkPageBreak(totalBlockHeight + 4);
 
         // Entry Box
-        doc.setFillColor(248, 249, 250);
-        doc.setDrawColor(225, 230, 235);
-        doc.setLineWidth(0.2);
-        doc.roundedRect(margin, y, contentWidth, totalBlockHeight - 4, 2, 2, 'FD');
+        doc.setFillColor(250, 250, 252);
+        doc.setDrawColor(226, 230, 236);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-        // Time badge
+        // Time badge inside card top
         doc.setFillColor(30, 35, 45);
-        doc.roundedRect(margin + 3, y + 3, 34, 7, 1.5, 1.5, 'F');
+        doc.roundedRect(margin + 4, y + 3.5, 34, 6.5, 1.5, 1.5, 'F');
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
+        doc.setFontSize(8);
         doc.setTextColor(255, 255, 255);
-        doc.text(timeText, margin + 4.5, y + 7.5);
+        doc.text(timeText, margin + 5.5, y + 7.8);
 
-        // Work Title
+        // Session index label on the right
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(140, 145, 155);
+        doc.text(`Session #${index + 1}`, margin + contentWidth - 22, y + 7.8);
+
+        // Work Title (Full width, padded on both sides, NEVER overflows)
+        const workStartY = y + 15;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
+        doc.setFontSize(9.5);
         doc.setTextColor(25, 25, 30);
-        doc.text(splitWork, margin + 41, y + 7.5);
+        doc.text(splitWork, margin + 5, workStartY);
 
-        let currentBlockY = y + Math.max(12, workHeight + 7);
+        let currentBlockY = workStartY + workHeight + 1.5;
 
         // Notes inside card
         if (notesText) {
-          doc.setDrawColor(230, 232, 238);
+          doc.setDrawColor(230, 233, 238);
           doc.setLineWidth(0.2);
-          doc.line(margin + 4, currentBlockY, margin + contentWidth - 4, currentBlockY);
-          currentBlockY += 4;
+          doc.line(margin + 5, currentBlockY, margin + contentWidth - 5, currentBlockY);
+          currentBlockY += 3.5;
 
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8.5);
+          doc.setFontSize(8);
           doc.setTextColor(180, 100, 10);
-          doc.text('LEARNINGS & SESSION NOTES:', margin + 4, currentBlockY);
+          doc.text('LEARNINGS & SESSION NOTES:', margin + 5, currentBlockY);
 
-          currentBlockY += 4.5;
+          currentBlockY += 4;
           doc.setFont('helvetica', 'normal');
-          doc.setFontSize(9);
+          doc.setFontSize(8.5);
           doc.setTextColor(45, 50, 60);
-          doc.text(splitNotes, margin + 4, currentBlockY);
+          doc.text(splitNotes, margin + 5, currentBlockY);
         }
 
-        y += totalBlockHeight;
+        y += totalBlockHeight + 4;
       });
     }
 
@@ -541,4 +671,3 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   const safeRange = (rangeLabel || `Days_${selectedDays.length}`).replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`ID2950_Documenting_MultiDay_${safeRange}.pdf`);
 }
-
