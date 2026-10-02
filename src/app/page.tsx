@@ -20,10 +20,32 @@ import {
   ClipboardPaste, 
   Files 
 } from 'lucide-react';
-import { DayLog, TimeEntry, AppUsageItem } from '@/types';
+import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
+
+export const DHIKR_PRESETS = [
+  'La ilaha illallah',
+  'Astaghfirullah',
+  'Subhanallah',
+  'Alhamdulillah',
+  'Allahu Akbar',
+  'Subhanallahi wa bihamdihi',
+  'Subhanallahil Azeem',
+  'La hawla wa la quwwata illa billah',
+  'Durood Sharif',
+  'Hasbunallahu wa ni\'mal wakeel',
+  'Ayat al-Kursi',
+  'Custom...',
+];
+
+export function createDefaultDhikr(dayId: string): DhikrItem[] {
+  return [
+    { id: `dhikr-${dayId}-1`, name: 'La ilaha illallah', count: '' },
+    { id: `dhikr-${dayId}-2`, name: 'Astaghfirullah', count: '' },
+  ];
+}
 
 const DEFAULT_DAYS: DayLog[] = [
   {
@@ -39,6 +61,7 @@ const DEFAULT_DAYS: DayLog[] = [
         notes: '',
       },
     ],
+    dhikrList: createDefaultDhikr('day-1'),
   },
 ];
 
@@ -156,7 +179,16 @@ export default function ID2950Page() {
   const [expandedWellbeing, setExpandedWellbeing] = useState<Record<string, boolean>>({});
   const [pasteWellbeingDayId, setPasteWellbeingDayId] = useState<string | null>(null);
   const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
+  const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Toggle Dhikr bar collapse
+  const toggleDhikrCollapse = (dayId: string) => {
+    setCollapsedDhikr((prev) => ({
+      ...prev,
+      [dayId]: !prev[dayId],
+    }));
+  };
 
   // Multi-Day PDF Export states
   const [isMultiDayExportOpen, setIsMultiDayExportOpen] = useState<boolean>(false);
@@ -172,6 +204,10 @@ export default function ID2950Page() {
         const parsed: DayLog[] = JSON.parse(stored);
         const cleaned: DayLog[] = parsed.map((d) => ({
           ...d,
+          dhikrList:
+            d.dhikrList && d.dhikrList.length > 0
+              ? d.dhikrList
+              : createDefaultDhikr(d.id),
           appUsage: (d.appUsage || []).map((app) => ({
             ...app,
             duration:
@@ -240,6 +276,8 @@ export default function ID2950Page() {
           notes: '',
         },
       ],
+      appUsage: [],
+      dhikrList: createDefaultDhikr(`day-${Date.now()}`),
     };
 
     const updated = [...days, newDay];
@@ -539,6 +577,89 @@ export default function ID2950Page() {
     saveDays(updated);
   };
 
+  // Add a new Dhikr item to a day
+  const handleAddDhikr = (dayId: string, initialName: string = 'Subhanallah') => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.dhikrList || [];
+      return {
+        ...d,
+        dhikrList: [
+          ...current,
+          {
+            id: `dhikr-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            name: initialName,
+            count: '',
+          },
+        ],
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Update a Dhikr item (name or count)
+  const handleUpdateDhikr = (
+    dayId: string,
+    dhikrId: string,
+    field: 'name' | 'count',
+    value: string
+  ) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.dhikrList || [];
+      return {
+        ...d,
+        dhikrList: current.map((item) =>
+          item.id === dhikrId ? { ...item, [field]: value } : item
+        ),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Remove a Dhikr item
+  const handleRemoveDhikr = (dayId: string, dhikrId: string) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.dhikrList || [];
+      return {
+        ...d,
+        dhikrList: current.filter((item) => item.id !== dhikrId),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Reset a day's Dhikr back to the default two (La ilaha illallah & Astaghfirullah)
+  const handleResetDhikr = (dayId: string) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      return {
+        ...d,
+        dhikrList: createDefaultDhikr(dayId),
+      };
+    });
+    saveDays(updated);
+  };
+
+  // Quick increment counter helper (+33, +100)
+  const handleQuickIncrementDhikr = (dayId: string, dhikrId: string, amount: number) => {
+    const updated = days.map((d) => {
+      if (d.id !== dayId) return d;
+      const current = d.dhikrList || [];
+      return {
+        ...d,
+        dhikrList: current.map((item) => {
+          if (item.id !== dhikrId) return item;
+          const currentCountNum = parseInt(item.count.replace(/\D/g, ''), 10);
+          const nextVal = isNaN(currentCountNum) ? amount : currentCountNum + amount;
+          return { ...item, count: String(nextVal) };
+        }),
+      };
+    });
+    saveDays(updated);
+  };
+
   // Copy day entries to clipboard as clean text (with multiple numbered works & notes)
   const handleCopyDay = (day: DayLog) => {
     let text = `${day.name || 'Untitled Day'} (${day.month})\n`;
@@ -572,11 +693,22 @@ export default function ID2950Page() {
       }
     }
 
+    if (day.dhikrList && day.dhikrList.length > 0) {
+      const validDhikr = day.dhikrList.filter((d) => d.name.trim() && d.count?.trim());
+      if (validDhikr.length > 0) {
+        text += '\n📿 Daily Dhikr:\n';
+        validDhikr.forEach((d) => {
+          text += `   • ${d.name}: ${d.count}\n`;
+        });
+      }
+    }
+
     navigator.clipboard.writeText(text).then(() => {
       setCopiedDayId(day.id);
       setTimeout(() => setCopiedDayId(null), 2000);
     });
   };
+
 
   // Export multiple days as a single combined PDF report
   const handleExportMultiDay = () => {
@@ -643,9 +775,13 @@ export default function ID2950Page() {
           return;
         }
 
-        // Clean any corrupted duration strings
+        // Clean any corrupted duration strings and ensure dhikrList
         const cleaned: DayLog[] = importedDays.map((d) => ({
           ...d,
+          dhikrList:
+            d.dhikrList && d.dhikrList.length > 0
+              ? d.dhikrList
+              : createDefaultDhikr(d.id),
           appUsage: (d.appUsage || []).map((app) => ({
             ...app,
             duration:
@@ -1355,7 +1491,170 @@ export default function ID2950Page() {
                 })}
               </div>
 
+              {/* Daily Dhikr Tracker Bar */}
+              <div className="mt-4 pt-3.5 border-t border-neutral-850/70 bg-neutral-950/40 rounded-xl p-3 sm:p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-neutral-850/80">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base select-none">📿</span>
+                    <span className="text-xs font-bold text-neutral-200 uppercase tracking-wider font-mono">
+                      Daily Dhikr
+                    </span>
+                    {day.dhikrList && day.dhikrList.length > 0 && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-800/40">
+                        {day.dhikrList.filter((d) => d.count?.trim()).length}/{day.dhikrList.length} recorded
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => handleAddDhikr(day.id)}
+                      className="flex items-center gap-1 text-[11px] text-neutral-300 hover:text-white px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 transition"
+                      title="Add another Dhikr dropdown to track"
+                    >
+                      <Plus className="w-3 h-3 text-neutral-400" />
+                      <span>Add Dhikr</span>
+                    </button>
+
+                    {(!day.dhikrList || day.dhikrList.length < 2) && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetDhikr(day.id)}
+                        className="text-[11px] text-amber-400 hover:text-amber-300 px-2.5 py-1 rounded-lg bg-amber-950/30 hover:bg-amber-900/40 border border-amber-900/40 transition"
+                        title="Reset to default initial two (La ilaha illallah & Astaghfirullah)"
+                      >
+                        Reset Initial 2
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => toggleDhikrCollapse(day.id)}
+                      className="p-1 text-neutral-400 hover:text-white rounded-lg hover:bg-neutral-850 transition"
+                      title={collapsedDhikr[day.id] ? "Expand Daily Dhikr" : "Collapse Daily Dhikr"}
+                    >
+                      {collapsedDhikr[day.id] ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronUp className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {!collapsedDhikr[day.id] && (
+                  <>
+                    {(!day.dhikrList || day.dhikrList.length === 0) ? (
+                      <div className="text-center py-4 border border-dashed border-neutral-850 rounded-xl px-4">
+                        <p className="text-xs text-neutral-400 font-mono">
+                          No Dhikr currently tracked for this day.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleResetDhikr(day.id)}
+                          className="mt-2 text-xs text-amber-400 hover:underline font-mono"
+                        >
+                          + Restore Initial Two (La ilaha illallah & Astaghfirullah)
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {day.dhikrList.map((item) => {
+                          const isKnownPreset = DHIKR_PRESETS.filter(p => p !== 'Custom...').includes(item.name);
+                          const isCustom = !isKnownPreset;
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex flex-col gap-2 p-2.5 rounded-xl bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 transition"
+                            >
+                              {/* Dhikr Dropdown Select Bar */}
+                              <div className="flex items-center gap-1.5">
+                                <div className="flex-1 min-w-0">
+                                  <select
+                                    value={isCustom ? 'Custom...' : item.name}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (val === 'Custom...') {
+                                        handleUpdateDhikr(day.id, item.id, 'name', '');
+                                      } else {
+                                        handleUpdateDhikr(day.id, item.id, 'name', val);
+                                      }
+                                    }}
+                                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-amber-500/60 rounded-lg px-2.5 py-1.5 text-xs text-neutral-100 font-medium outline-none cursor-pointer"
+                                  >
+                                    {DHIKR_PRESETS.map((preset) => (
+                                      <option key={preset} value={preset} className="bg-neutral-900 text-neutral-200">
+                                        {preset}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDhikr(day.id, item.id)}
+                                  className="text-neutral-500 hover:text-rose-400 p-1.5 text-xs rounded transition cursor-pointer"
+                                  title="Remove this Dhikr"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+
+                              {/* Custom Dhikr Input Field */}
+                              {isCustom && (
+                                <input
+                                  type="text"
+                                  placeholder="Type custom Dhikr name..."
+                                  value={item.name}
+                                  onChange={(e) =>
+                                    handleUpdateDhikr(day.id, item.id, 'name', e.target.value)
+                                  }
+                                  className="w-full bg-neutral-950 border border-neutral-800 focus:border-amber-500/60 rounded-lg px-2.5 py-1 text-xs text-neutral-100 outline-none"
+                                />
+                              )}
+
+                              {/* Manual Count / Time Box with quick helpers */}
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  placeholder="Count / time (e.g. 100, 33, 15m)"
+                                  value={item.count || ''}
+                                  onChange={(e) =>
+                                    handleUpdateDhikr(day.id, item.id, 'count', e.target.value)
+                                  }
+                                  className="flex-1 bg-neutral-950 border border-neutral-800 focus:border-amber-500/60 rounded-lg px-2.5 py-1.5 text-xs font-mono text-neutral-100 outline-none placeholder:text-neutral-600 transition"
+                                />
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickIncrementDhikr(day.id, item.id, 33)}
+                                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-neutral-200 transition"
+                                  title="Add +33"
+                                >
+                                  +33
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickIncrementDhikr(day.id, item.id, 100)}
+                                  className="text-[10px] font-mono px-2 py-1 rounded bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-neutral-200 transition"
+                                  title="Add +100"
+                                >
+                                  +100
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* Day Bottom Actions */}
+
               <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-neutral-850/60 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <button

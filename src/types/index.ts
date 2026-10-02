@@ -13,10 +13,18 @@ export interface AppUsageItem {
   duration: string; // e.g. "1h 45m" or "35m"
 }
 
+export interface DhikrItem {
+  id: string;
+  name: string;      // e.g. "La ilaha illallah", "Astaghfirullah", or custom
+  count: string;     // manual count or time, e.g. "100", "33", "15 mins"
+}
+
 export interface DayLog {
   id: string;
   name: string;      // user-defined day name, e.g. "2 October 2026"
   month: string;     // user-defined month, e.g. "October 2026"
   entries: TimeEntry[];
   appUsage?: AppUsageItem[]; // Digital Wellbeing screen time
+  dhikrList?: DhikrItem[];   // Daily Dhikr tracker
 }
+

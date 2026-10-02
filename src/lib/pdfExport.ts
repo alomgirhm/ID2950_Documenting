@@ -275,6 +275,39 @@ export function downloadDayPDF(day: DayLog) {
     }
   }
 
+  // Daily Dhikr & Remembrance section in PDF
+  if (day.dhikrList && day.dhikrList.length > 0) {
+    const validDhikr = day.dhikrList.filter(
+      (d) => d.name.trim().length > 0 && d.count && d.count.trim().length > 0
+    );
+    if (validDhikr.length > 0) {
+      const dhikrBoxHeight = 12 + validDhikr.length * 5.5;
+      checkPageBreak(dhikrBoxHeight + 8);
+      y += 2;
+      doc.setFillColor(254, 252, 246);
+      doc.setDrawColor(228, 212, 175);
+      doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(160, 90, 10);
+      doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
+
+      let dhikrY = y + 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(60, 65, 75);
+
+      validDhikr.forEach((item) => {
+        doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
+        dhikrY += 5;
+      });
+
+      y += dhikrBoxHeight + 4;
+    }
+  }
+
+
   // Footer on last page
   checkPageBreak(15);
   y = Math.min(y + 6, pageHeight - 12);
@@ -652,6 +685,38 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       }
     }
 
+    // Daily Dhikr & Remembrance section in Multi-Day PDF
+    if (day.dhikrList && day.dhikrList.length > 0) {
+      const validDhikr = day.dhikrList.filter(
+        (d) => d.name.trim().length > 0 && d.count && d.count.trim().length > 0
+      );
+      if (validDhikr.length > 0) {
+        const dhikrBoxHeight = 12 + validDhikr.length * 5.5;
+        checkPageBreak(dhikrBoxHeight + 8);
+        y += 2;
+        doc.setFillColor(254, 252, 246);
+        doc.setDrawColor(228, 212, 175);
+        doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9);
+        doc.setTextColor(160, 90, 10);
+        doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
+
+        let dhikrY = y + 11;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(60, 65, 75);
+
+        validDhikr.forEach((item) => {
+          doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
+          dhikrY += 5;
+        });
+
+        y += dhikrBoxHeight + 4;
+      }
+    }
+
     y += 2;
   });
 
@@ -671,3 +736,4 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   const safeRange = (rangeLabel || `Days_${selectedDays.length}`).replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`ID2950_Documenting_MultiDay_${safeRange}.pdf`);
 }
+
