@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { DayLog, TimeEntry } from '@/types';
+import { calculateDuration, calculateDayTotalDuration } from '@/lib/timeUtils';
 
 function getFormattedWorkLines(entry: TimeEntry): string {
   if (entry.works && entry.works.length > 0) {
@@ -148,7 +149,12 @@ export function downloadDayPDF(day: DayLog) {
     hour: '2-digit',
     minute: '2-digit',
   });
-  doc.text(`Month: ${day.month}   |   Exported: ${timeStamp}`, margin, y + 5);
+  const totalDayTime = calculateDayTotalDuration(day.entries);
+  doc.text(
+    `Month: ${day.month}   |   Exported: ${timeStamp}${totalDayTime ? `   |   Total Time: ${totalDayTime}` : ''}`,
+    margin,
+    y + 5
+  );
 
   y += 11;
 
@@ -170,7 +176,10 @@ export function downloadDayPDF(day: DayLog) {
 
   // 3. Loop over all time blocks / sessions
   day.entries.forEach((entry, index) => {
-    const timeText = `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
+    const duration = calculateDuration(entry.startTime, entry.endTime);
+    const timeText = duration
+      ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} • ${duration} ]`
+      : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
     const workText = getFormattedWorkLines(entry);
     const notesText = entry.notes?.trim() || '';
 
@@ -199,13 +208,14 @@ export function downloadDayPDF(day: DayLog) {
     doc.setLineWidth(0.3);
     doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-    // 2. Top Header inside Card: Time badge
-    doc.setFillColor(30, 35, 45);
-    doc.roundedRect(margin + 4, y + 3.5, 34, 6.5, 1.5, 1.5, 'F');
+    // 2. Top Header inside Card: Time badge with duration
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
+    const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 5);
+    doc.setFillColor(30, 35, 45);
+    doc.roundedRect(margin + 4, y + 3.5, badgeWidth, 6.5, 1.5, 1.5, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.text(timeText, margin + 5.5, y + 7.8);
+    doc.text(timeText, margin + 6.5, y + 7.8);
 
     // Session index label on the right
     doc.setFont('helvetica', 'normal');
@@ -401,7 +411,11 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(25, 30, 45);
-  doc.text(`${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}`, margin + 4, y + 12.5);
+  const duration = calculateDuration(entry.startTime, entry.endTime);
+  const timeDisplay = duration
+    ? `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}   (Duration: ${duration})`
+    : `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}`;
+  doc.text(timeDisplay, margin + 4, y + 12.5);
 
   y += 24;
 
@@ -580,7 +594,10 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       y += 8;
     } else {
       day.entries.forEach((entry, index) => {
-        const timeText = `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
+        const duration = calculateDuration(entry.startTime, entry.endTime);
+        const timeText = duration
+          ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} • ${duration} ]`
+          : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
         const workText = getFormattedWorkLines(entry);
         const notesText = entry.notes?.trim() || '';
 
@@ -609,13 +626,14 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setLineWidth(0.3);
         doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-        // Time badge inside card top
-        doc.setFillColor(30, 35, 45);
-        doc.roundedRect(margin + 4, y + 3.5, 34, 6.5, 1.5, 1.5, 'F');
+        // Time badge inside card top with duration
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
+        const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 5);
+        doc.setFillColor(30, 35, 45);
+        doc.roundedRect(margin + 4, y + 3.5, badgeWidth, 6.5, 1.5, 1.5, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.text(timeText, margin + 5.5, y + 7.8);
+        doc.text(timeText, margin + 6.5, y + 7.8);
 
         // Session index label on the right
         doc.setFont('helvetica', 'normal');

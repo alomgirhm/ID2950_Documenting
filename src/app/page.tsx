@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
+import { calculateDuration, calculateDayTotalDuration } from '@/lib/timeUtils';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
@@ -1229,9 +1230,19 @@ export default function ID2950Page() {
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-3 pt-1 sm:pt-0">
-                    <span className="text-xs font-mono text-neutral-500">
-                      {day.entries.length} {day.entries.length === 1 ? 'block' : 'blocks'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-neutral-500">
+                        {day.entries.length} {day.entries.length === 1 ? 'block' : 'blocks'}
+                      </span>
+                      {calculateDayTotalDuration(day.entries) && (
+                        <span
+                          className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 border border-amber-800/40 font-semibold"
+                          title="Total productive hours logged for this day"
+                        >
+                          Total: {calculateDayTotalDuration(day.entries)}
+                        </span>
+                      )}
+                    </div>
 
                     <div className="flex items-center gap-1.5">
                       {/* Copy Day Log */}
@@ -1309,12 +1320,13 @@ export default function ID2950Page() {
                     <div className="flex items-center gap-2 flex-wrap min-w-0">
                       {day.entries.map((entry, idx) => {
                         if (!entry.startTime && !entry.endTime && !entry.work) return null;
+                        const dur = calculateDuration(entry.startTime, entry.endTime);
                         return (
                           <span
                             key={entry.id || idx}
                             className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800"
                           >
-                            [{entry.startTime || '--:--'} - {entry.endTime || '--:--'}]
+                            [{entry.startTime || '--:--'} - {entry.endTime || '--:--'}{dur ? ` • ${dur}` : ''}]
                           </span>
                         );
                       })}
@@ -1348,9 +1360,10 @@ export default function ID2950Page() {
                 
                 {/* Column Headers for Medium & Wide screens */}
                 <div className="hidden sm:grid grid-cols-12 gap-3 text-[11px] font-mono uppercase tracking-wider text-neutral-500 px-1 pb-1">
-                  <div className="col-span-2 lg:col-span-2">Start Time</div>
-                  <div className="col-span-2 lg:col-span-2">End Time</div>
-                  <div className="col-span-6 lg:col-span-6">What work I do</div>
+                  <div className="col-span-2 lg:col-span-2 text-center">Start Time</div>
+                  <div className="col-span-2 lg:col-span-2 text-center">End Time</div>
+                  <div className="col-span-2 lg:col-span-2 text-center">Duration</div>
+                  <div className="col-span-4 lg:col-span-4">What work I do</div>
                   <div className="col-span-1 lg:col-span-1 text-center">Notes</div>
                   <div className="col-span-1 lg:col-span-1 text-right">Remove</div>
                 </div>
@@ -1359,6 +1372,7 @@ export default function ID2950Page() {
                 {day.entries.map((entry, index) => {
                   const isNotesOpen = !!expandedNotes[entry.id];
                   const hasNotes = Boolean(entry.notes && entry.notes.trim().length > 0);
+                  const sessionDuration = calculateDuration(entry.startTime, entry.endTime);
 
                   return (
                     <div
@@ -1401,8 +1415,23 @@ export default function ID2950Page() {
                           />
                         </div>
 
+                        {/* Automatic Calculated Duration Box */}
+                        <div className="col-span-2 lg:col-span-2 flex items-center justify-center">
+                          <div
+                            className={`w-full py-2 px-2 rounded-xl border text-xs sm:text-sm font-mono flex items-center justify-center gap-1.5 transition select-none ${
+                              sessionDuration
+                                ? 'bg-amber-950/30 border-amber-800/50 text-amber-300 font-semibold shadow-sm'
+                                : 'bg-neutral-950/60 border-neutral-800/70 text-neutral-600'
+                            }`}
+                            title={sessionDuration ? `Duration: ${sessionDuration}` : 'Calculated automatically from Start & End Time'}
+                          >
+                            <span className="text-xs opacity-75">⏱️</span>
+                            <span>{sessionDuration || '--'}</span>
+                          </div>
+                        </div>
+
                         {/* What Work I Do Box (Multiple Numbered Works Supported) */}
-                        <div className="col-span-6 lg:col-span-6 space-y-2">
+                        <div className="col-span-4 lg:col-span-4 space-y-2">
                           {getWorksList(entry).map((workItem, wIdx, arr) => (
                             <div key={wIdx} className="flex items-center gap-2">
                               <span className="text-[11px] font-mono font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 min-w-[26px] text-center select-none flex-shrink-0">
@@ -1545,6 +1574,17 @@ export default function ID2950Page() {
                               className="w-full bg-neutral-900 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-2 text-xs font-mono text-neutral-200 outline-none text-center"
                             />
                           </div>
+                        </div>
+
+                        {/* Auto Calculated Duration Box on Mobile */}
+                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-neutral-900/80 border border-neutral-800 text-xs font-mono">
+                          <span className="text-neutral-400 flex items-center gap-1.5 text-[11px]">
+                            <span>⏱️</span>
+                            <span>Duration:</span>
+                          </span>
+                          <span className={`font-semibold ${sessionDuration ? 'text-amber-300' : 'text-neutral-600'}`}>
+                            {sessionDuration || 'Enter start & end'}
+                          </span>
                         </div>
 
                         {/* What Work I Do on mobile (with numbered works) */}
