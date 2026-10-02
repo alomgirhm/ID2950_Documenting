@@ -24,6 +24,7 @@ import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
+const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
 
 export const DHIKR_PRESETS = [
   'La ilaha illallah',
@@ -180,7 +181,19 @@ export default function ID2950Page() {
   const [pasteWellbeingDayId, setPasteWellbeingDayId] = useState<string | null>(null);
   const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
   const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
+  const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Toggle Day card collapse / dropdown
+  const toggleDayCollapse = (dayId: string) => {
+    setCollapsedDays((prev) => {
+      const next = { ...prev, [dayId]: !prev[dayId] };
+      try {
+        localStorage.setItem(COLLAPSED_DAYS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // Toggle Dhikr bar collapse
   const toggleDhikrCollapse = (dayId: string) => {
@@ -226,11 +239,30 @@ export default function ID2950Page() {
         setDays(DEFAULT_DAYS);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DAYS));
       }
+
+      // Load collapsed days state
+      const savedCollapsed = localStorage.getItem(COLLAPSED_DAYS_KEY);
+      if (savedCollapsed) {
+        setCollapsedDays(JSON.parse(savedCollapsed));
+      }
     } catch {
       setDays(DEFAULT_DAYS);
     }
     setIsLoaded(true);
   }, []);
+
+  // Collapse or Expand All Days for the active month
+  const handleToggleAllDays = (collapse: boolean) => {
+    const next: Record<string, boolean> = { ...collapsedDays };
+    filteredDays.forEach((d) => {
+      next[d.id] = collapse;
+    });
+    setCollapsedDays(next);
+    try {
+      localStorage.setItem(COLLAPSED_DAYS_KEY, JSON.stringify(next));
+    } catch {}
+  };
+
 
   // Save to localStorage whenever days state changes
   const saveDays = (updatedDays: DayLog[]) => {
@@ -904,6 +936,35 @@ export default function ID2950Page() {
               <span>Multi-Day PDF</span>
             </button>
 
+            {/* Collapse / Expand All Days Toggle */}
+            {filteredDays.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const allCollapsed = filteredDays.every((d) => !!collapsedDays[d.id]);
+                  handleToggleAllDays(!allCollapsed);
+                }}
+                className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium shadow-sm cursor-pointer"
+                title={
+                  filteredDays.every((d) => !!collapsedDays[d.id])
+                    ? "Expand all days"
+                    : "Collapse all days to save screen space"
+                }
+              >
+                {filteredDays.every((d) => !!collapsedDays[d.id]) ? (
+                  <>
+                    <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Expand All</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>Collapse All</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {/* Backup JSON Button */}
             <button
               onClick={handleExportJSON}
@@ -1104,99 +1165,186 @@ export default function ID2950Page() {
             </p>
           </div>
         ) : (
-          filteredDays.map((day) => (
-            <section
-              key={day.id}
-              className="bg-neutral-900/40 border border-neutral-850 hover:border-neutral-800 rounded-2xl p-4 sm:p-6 lg:p-7 transition-all shadow-sm"
-            >
-              {/* Day Header with user-assigned name */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-neutral-800/80 mb-4 sm:mb-5 gap-3">
-                <div className="flex items-center gap-2 flex-1">
-                  {editingDayId === day.id ? (
-                    <div className="flex items-center gap-2 flex-1 max-w-md">
-                      <input
-                        type="text"
-                        value={editingDayName}
-                        onChange={(e) => setEditingDayName(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveRename(day.id);
-                        }}
-                        className="bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-1.5 text-sm sm:text-base font-semibold text-white outline-none w-full"
-                      />
-                      <button
-                        onClick={() => handleSaveRename(day.id)}
-                        className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-emerald-400"
-                        title="Save name"
+          filteredDays.map((day) => {
+            const isDayCollapsed = !!collapsedDays[day.id];
+
+            return (
+              <section
+                key={day.id}
+                className={`border rounded-2xl p-4 sm:p-6 lg:p-7 transition-all shadow-sm ${
+                  isDayCollapsed
+                    ? 'bg-neutral-950/60 border-neutral-850 hover:border-neutral-800'
+                    : 'bg-neutral-900/40 border-neutral-850 hover:border-neutral-800'
+                }`}
+              >
+                {/* Day Header with user-assigned name */}
+                <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-neutral-800/80 gap-3 ${isDayCollapsed ? 'mb-0' : 'mb-4 sm:mb-5'}`}>
+                  <div className="flex items-center gap-2 flex-1">
+                    {editingDayId === day.id ? (
+                      <div className="flex items-center gap-2 flex-1 max-w-md">
+                        <input
+                          type="text"
+                          value={editingDayName}
+                          onChange={(e) => setEditingDayName(e.target.value)}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveRename(day.id);
+                          }}
+                          className="bg-neutral-950 border border-neutral-700 rounded-xl px-3 py-1.5 text-sm sm:text-base font-semibold text-white outline-none w-full"
+                        />
+                        <button
+                          onClick={() => handleSaveRename(day.id)}
+                          className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-emerald-400"
+                          title="Save name"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div 
+                        onClick={() => toggleDayCollapse(day.id)}
+                        className="flex items-center gap-2.5 group cursor-pointer select-none"
+                        title={isDayCollapsed ? "Click to open day" : "Click to close day"}
                       >
-                        <Check className="w-4 h-4" />
+                        <h2 className="text-base sm:text-xl font-bold text-white tracking-wide group-hover:text-amber-300 transition">
+                          {day.name}
+                        </h2>
+                        {isDayCollapsed && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400 border border-neutral-700">
+                            Closed
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartRename(day);
+                          }}
+                          className="text-neutral-500 hover:text-neutral-300 p-1 rounded transition"
+                          title="Rename day"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-1 sm:pt-0">
+                    <span className="text-xs font-mono text-neutral-500">
+                      {day.entries.length} {day.entries.length === 1 ? 'block' : 'blocks'}
+                    </span>
+
+                    <div className="flex items-center gap-1.5">
+                      {/* Copy Day Log */}
+                      <button
+                        onClick={() => handleCopyDay(day)}
+                        className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
+                        title="Copy Day Summary (Includes Notes)"
+                      >
+                        {copiedDayId === day.id ? (
+                          <>
+                            <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-400 font-semibold text-[11px]">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                            <span className="text-[11px] hidden sm:inline">Copy</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Download Day PDF */}
+                      <button
+                        onClick={() => downloadDayPDF(day)}
+                        className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
+                        title="Download Full Day Report as PDF"
+                      >
+                        <Download className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-[11px] hidden sm:inline">PDF</span>
+                      </button>
+
+                      {/* Delete Day */}
+                      <button
+                        onClick={() => handleDeleteDay(day.id)}
+                        className="text-neutral-500 hover:text-rose-400 p-2 rounded-lg hover:bg-neutral-800/40 transition"
+                        title="Delete Day"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+
+                      {/* Toggle Day Dropdown (Collapse / Open) */}
+                      <button
+                        type="button"
+                        onClick={() => toggleDayCollapse(day.id)}
+                        className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition font-mono cursor-pointer ${
+                          isDayCollapsed
+                            ? 'bg-amber-950/40 hover:bg-amber-900/50 border-amber-800/50 text-amber-300 shadow-sm'
+                            : 'bg-neutral-950 hover:bg-neutral-850 border-neutral-800 text-neutral-400 hover:text-white'
+                        }`}
+                        title={isDayCollapsed ? "Open / View this day" : "Close / Collapse this day"}
+                      >
+                        {isDayCollapsed ? (
+                          <>
+                            <span className="text-[11px] font-semibold">Open</span>
+                            <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[11px] hidden sm:inline">Close</span>
+                            <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                          </>
+                        )}
                       </button>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2.5 group">
-                      <h2 className="text-base sm:text-xl font-bold text-white tracking-wide">
-                        {day.name}
-                      </h2>
-                      <button
-                        onClick={() => handleStartRename(day)}
-                        className="text-neutral-500 hover:text-neutral-300 p-1 rounded transition"
-                        title="Rename day"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between sm:justify-end gap-3 pt-1 sm:pt-0">
-                  <span className="text-xs font-mono text-neutral-500">
-                    {day.entries.length} {day.entries.length === 1 ? 'block' : 'blocks'}
-                  </span>
-
-                  <div className="flex items-center gap-1.5">
-                    {/* Copy Day Log */}
-                    <button
-                      onClick={() => handleCopyDay(day)}
-                      className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
-                      title="Copy Day Summary (Includes Notes)"
-                    >
-                      {copiedDayId === day.id ? (
-                        <>
-                          <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                          <span className="text-emerald-400 font-semibold text-[11px]">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5 text-neutral-400" />
-                          <span className="text-[11px] hidden sm:inline">Copy</span>
-                        </>
-                      )}
-                    </button>
-
-                    {/* Download Day PDF */}
-                    <button
-                      onClick={() => downloadDayPDF(day)}
-                      className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
-                      title="Download Full Day Report as PDF"
-                    >
-                      <Download className="w-3.5 h-3.5 text-neutral-400" />
-                      <span className="text-[11px] hidden sm:inline">PDF</span>
-                    </button>
-
-                    {/* Delete Day */}
-                    <button
-                      onClick={() => handleDeleteDay(day.id)}
-                      className="text-neutral-500 hover:text-rose-400 p-2 rounded-lg hover:bg-neutral-800/40 transition"
-                      title="Delete Day"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
-              </div>
 
-              {/* Time Entries Table / Boxes */}
-              <div className="space-y-3.5">
+                {/* If Collapsed, show sleek compact preview bar */}
+                {isDayCollapsed ? (
+                  <div
+                    onClick={() => toggleDayCollapse(day.id)}
+                    className="mt-3 p-3 sm:p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-850 hover:border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition group"
+                    title="Click to open and view all entries for this day"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      {day.entries.map((entry, idx) => {
+                        if (!entry.startTime && !entry.endTime && !entry.work) return null;
+                        return (
+                          <span
+                            key={entry.id || idx}
+                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800"
+                          >
+                            [{entry.startTime || '--:--'} - {entry.endTime || '--:--'}]
+                          </span>
+                        );
+                      })}
+
+                      {day.entries[0]?.work && (
+                        <span className="text-xs text-neutral-400 truncate max-w-sm sm:max-w-md">
+                          {day.entries[0].work}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-neutral-500 group-hover:text-amber-300 font-mono text-[11px] transition shrink-0">
+                      {day.dhikrList && day.dhikrList.some((d) => d.count?.trim()) && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-800/40">
+                          📿 Dhikr
+                        </span>
+                      )}
+                      {day.appUsage && day.appUsage.length > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/40">
+                          📱 {day.appUsage.length} apps
+                        </span>
+                      )}
+                      <span className="text-xs font-medium ml-1">Click to open day</span>
+                      <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Time Entries Table / Boxes */}
+                    <div className="space-y-3.5">
                 
                 {/* Column Headers for Medium & Wide screens */}
                 <div className="hidden sm:grid grid-cols-12 gap-3 text-[11px] font-mono uppercase tracking-wider text-neutral-500 px-1 pb-1">
@@ -1852,8 +2000,11 @@ export default function ID2950Page() {
                   </div>
                 </div>
               )}
-            </section>
-          ))
+                  </>
+                )}
+              </section>
+            );
+          })
         )}
 
         {/* Option to Add New Day with Name */}
