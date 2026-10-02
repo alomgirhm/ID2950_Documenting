@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -12,12 +12,13 @@ import {
   CheckCheck, 
   FileText, 
   ChevronDown, 
-  ChevronUp,
-  Sparkles,
-  Download,
-  Smartphone,
-  ClipboardPaste,
-  Files
+  ChevronUp, 
+  Sparkles, 
+  Download, 
+  Upload, 
+  Smartphone, 
+  ClipboardPaste, 
+  Files 
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
@@ -588,6 +589,92 @@ export default function ID2950Page() {
     setIsMultiDayExportOpen(false);
   };
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [backupNotice, setBackupNotice] = useState<string | null>(null);
+
+  // Export all data to JSON file
+  const handleExportJSON = () => {
+    try {
+      const dataToSave = {
+        app: 'ID2950_Documenting',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        totalDays: days.length,
+        days: days,
+      };
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
+        JSON.stringify(dataToSave, null, 2)
+      )}`;
+      const downloadAnchor = document.createElement('a');
+      const now = new Date().toISOString().slice(0, 10);
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', `ID2950_Documenting_Backup_${now}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      setBackupNotice('Backup JSON downloaded successfully!');
+      setTimeout(() => setBackupNotice(null), 3500);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to export backup JSON.');
+    }
+  };
+
+  // Import / Restore data from JSON file
+  const handleImportJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileReader = new FileReader();
+    fileReader.readAsText(files[0], 'UTF-8');
+    fileReader.onload = (event) => {
+      try {
+        const content = event.target?.result as string;
+        const parsed = JSON.parse(content);
+
+        let importedDays: DayLog[] = [];
+        if (Array.isArray(parsed)) {
+          importedDays = parsed;
+        } else if (parsed && Array.isArray(parsed.days)) {
+          importedDays = parsed.days;
+        } else {
+          alert('Invalid backup format. File must contain a days array.');
+          return;
+        }
+
+        // Clean any corrupted duration strings
+        const cleaned: DayLog[] = importedDays.map((d) => ({
+          ...d,
+          appUsage: (d.appUsage || []).map((app) => ({
+            ...app,
+            duration:
+              app.duration?.includes('stopwatch') ||
+              app.duration?.startsWith('[') ||
+              app.duration?.startsWith('{')
+                ? ''
+                : app.duration,
+          })),
+        }));
+
+        saveDays(cleaned);
+        if (cleaned.length > 0 && cleaned[0].month) {
+          setActiveMonth(cleaned[0].month);
+        }
+
+        setBackupNotice(`Restored ${cleaned.length} days successfully!`);
+        setTimeout(() => setBackupNotice(null), 4000);
+      } catch (err) {
+        console.error(err);
+        alert('Error reading backup file. Please select a valid JSON backup file.');
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-400 flex items-center justify-center font-mono text-xs">
@@ -680,6 +767,33 @@ export default function ID2950Page() {
               <Files className="w-3.5 h-3.5 text-amber-400" />
               <span>Multi-Day PDF</span>
             </button>
+
+            {/* Backup JSON Button */}
+            <button
+              onClick={handleExportJSON}
+              className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium shadow-sm cursor-pointer"
+              title="Download full JSON backup of all days, notes, and screen times"
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Backup</span>
+            </button>
+
+            {/* Restore JSON Button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium shadow-sm cursor-pointer"
+              title="Restore / Import data from a backup JSON file"
+            >
+              <Upload className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Restore</span>
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleImportJSON}
+              accept=".json"
+              className="hidden"
+            />
           </div>
 
         </div>
@@ -687,6 +801,14 @@ export default function ID2950Page() {
 
       {/* Main Wide & Responsive Container */}
       <main className="max-w-7xl mx-auto px-3 sm:px-8 lg:px-12 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        
+        {/* Floating Backup Notification */}
+        {backupNotice && (
+          <div className="fixed top-5 right-5 z-50 bg-neutral-900 border border-emerald-500/50 text-emerald-300 text-xs font-mono px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 animate-fadeIn">
+            <CheckCheck className="w-4 h-4 text-emerald-400" />
+            <span>{backupNotice}</span>
+          </div>
+        )}
         
         {/* Multi-Day Export Modal */}
         {isMultiDayExportOpen && (
