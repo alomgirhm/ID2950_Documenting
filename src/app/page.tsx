@@ -16,10 +16,11 @@ import {
   Sparkles,
   Download,
   Smartphone,
-  ClipboardPaste
+  ClipboardPaste,
+  Files
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem } from '@/types';
-import { downloadDayPDF, downloadSingleSessionPDF } from '@/lib/pdfExport';
+import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 
@@ -156,15 +157,33 @@ export default function ID2950Page() {
   const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Load from localStorage on mount
+  // Multi-Day PDF Export states
+  const [isMultiDayExportOpen, setIsMultiDayExportOpen] = useState<boolean>(false);
+  const [rangeStart, setRangeStart] = useState<number>(1);
+  const [rangeEnd, setRangeEnd] = useState<number>(10);
+  const [customRangeTitle, setCustomRangeTitle] = useState<string>('');
+
+  // Load from localStorage on mount & clean any legacy corrupted tokens
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed: DayLog[] = JSON.parse(stored);
-        setDays(parsed);
-        if (parsed.length > 0 && parsed[0].month) {
-          setActiveMonth(parsed[0].month);
+        const cleaned: DayLog[] = parsed.map((d) => ({
+          ...d,
+          appUsage: (d.appUsage || []).map((app) => ({
+            ...app,
+            duration:
+              app.duration?.includes('stopwatch') ||
+              app.duration?.startsWith('[') ||
+              app.duration?.startsWith('{')
+                ? ''
+                : app.duration,
+          })),
+        }));
+        setDays(cleaned);
+        if (cleaned.length > 0 && cleaned[0].month) {
+          setActiveMonth(cleaned[0].month);
         }
       } else {
         setDays(DEFAULT_DAYS);
@@ -419,14 +438,20 @@ export default function ID2950Page() {
     }));
   };
 
-  // Add a new App Screen Time item
-  const handleAddAppUsage = (dayId: string) => {
+  // Add a new App Screen Time item (or add specific app via chip)
+  const handleAddAppUsage = (dayId: string, prefilledAppName: string = '') => {
     const updated = days.map((d) => {
       if (d.id !== dayId) return d;
       const current = d.appUsage || [];
+      if (prefilledAppName.trim()) {
+        const exists = current.find(
+          (a) => a.appName.toLowerCase().trim() === prefilledAppName.toLowerCase().trim()
+        );
+        if (exists) return d;
+      }
       const newItem: AppUsageItem = {
-        id: `app-${Date.now()}`,
-        appName: '',
+        id: `app-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        appName: prefilledAppName,
         duration: '',
       };
       return {
@@ -552,6 +577,17 @@ export default function ID2950Page() {
     });
   };
 
+  // Export multiple days as a single combined PDF report
+  const handleExportMultiDay = () => {
+    if (filteredDays.length === 0) return;
+    const start = Math.max(1, Math.min(rangeStart, filteredDays.length));
+    const end = Math.max(start, Math.min(rangeEnd, filteredDays.length));
+    const slice = filteredDays.slice(start - 1, end);
+    const label = customRangeTitle.trim() || `Days ${start} - ${end} (${activeMonth})`;
+    downloadMultiDayPDF(slice, label);
+    setIsMultiDayExportOpen(false);
+  };
+
   if (!isLoaded) {
     return (
       <div className="min-h-screen bg-neutral-950 text-neutral-400 flex items-center justify-center font-mono text-xs">
@@ -629,6 +665,21 @@ export default function ID2950Page() {
                 + Month
               </button>
             )}
+
+            {/* Multi-Day PDF Export Button */}
+            <button
+              onClick={() => {
+                setRangeStart(1);
+                setRangeEnd(Math.max(1, Math.min(10, filteredDays.length)));
+                setCustomRangeTitle(`Days 1 - ${Math.max(1, Math.min(10, filteredDays.length))}`);
+                setIsMultiDayExportOpen(true);
+              }}
+              className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium shadow-sm"
+              title="Download combined PDF report for multiple days (e.g. Day 1 - 10)"
+            >
+              <Files className="w-3.5 h-3.5 text-amber-400" />
+              <span>Multi-Day PDF</span>
+            </button>
           </div>
 
         </div>
@@ -636,6 +687,155 @@ export default function ID2950Page() {
 
       {/* Main Wide & Responsive Container */}
       <main className="max-w-7xl mx-auto px-3 sm:px-8 lg:px-12 py-6 sm:py-8 space-y-6 sm:space-y-8">
+        
+        {/* Multi-Day Export Modal */}
+        {isMultiDayExportOpen && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-lg p-5 sm:p-6 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+                <div className="flex items-center gap-2">
+                  <Files className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                    Download Multi-Day PDF Report
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMultiDayExportOpen(false)}
+                  className="text-neutral-400 hover:text-white p-1 text-sm rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <p className="text-xs text-neutral-400 leading-relaxed">
+                Export a continuous, combined PDF report across multiple days at once. Select a day range (e.g. Day 1 - 10, or Day 3 - 8) or choose a quick preset.
+              </p>
+
+              {/* Quick Presets */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-mono text-neutral-400 block">
+                  Quick Presets:
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeStart(1);
+                      setRangeEnd(Math.max(1, Math.min(10, filteredDays.length)));
+                      setCustomRangeTitle(`Days 1 - ${Math.max(1, Math.min(10, filteredDays.length))}`);
+                    }}
+                    className="px-2.5 py-1 text-xs rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition font-mono"
+                  >
+                    Days 1 - 10
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeStart(1);
+                      setRangeEnd(Math.max(1, Math.min(7, filteredDays.length)));
+                      setCustomRangeTitle(`Days 1 - ${Math.max(1, Math.min(7, filteredDays.length))}`);
+                    }}
+                    className="px-2.5 py-1 text-xs rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition font-mono"
+                  >
+                    Days 1 - 7
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeStart(Math.min(3, filteredDays.length));
+                      setRangeEnd(Math.max(1, Math.min(8, filteredDays.length)));
+                      setCustomRangeTitle(`Days 3 - ${Math.max(1, Math.min(8, filteredDays.length))}`);
+                    }}
+                    className="px-2.5 py-1 text-xs rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition font-mono"
+                  >
+                    Days 3 - 8
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRangeStart(1);
+                      setRangeEnd(Math.max(1, filteredDays.length));
+                      setCustomRangeTitle(`All ${filteredDays.length} Days (${activeMonth})`);
+                    }}
+                    className="px-2.5 py-1 text-xs rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition font-mono"
+                  >
+                    All Days (1 - {filteredDays.length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Range Inputs */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-mono text-neutral-400 block mb-1">
+                    From Day (1 to {filteredDays.length}):
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={filteredDays.length || 1}
+                    value={rangeStart}
+                    onChange={(e) => setRangeStart(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs text-neutral-100 font-mono outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-mono text-neutral-400 block mb-1">
+                    To Day (1 to {filteredDays.length}):
+                  </label>
+                  <input
+                    type="number"
+                    min={rangeStart}
+                    max={filteredDays.length || 1}
+                    value={rangeEnd}
+                    onChange={(e) => setRangeEnd(Math.max(rangeStart, parseInt(e.target.value) || rangeStart))}
+                    className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs text-neutral-100 font-mono outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Optional Custom Label */}
+              <div>
+                <label className="text-[11px] font-mono text-neutral-400 block mb-1">
+                  Report Title / Range Label (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder={`Days ${rangeStart} - ${rangeEnd}`}
+                  value={customRangeTitle}
+                  onChange={(e) => setCustomRangeTitle(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs text-neutral-100 outline-none"
+                />
+              </div>
+
+              {/* Preview box */}
+              <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-850 text-xs font-mono text-neutral-400 flex items-center justify-between">
+                <span>Selected: {Math.max(0, Math.min(rangeEnd, filteredDays.length) - Math.min(rangeStart, filteredDays.length) + 1)} Days</span>
+                <span className="text-amber-400 font-bold">Month: {activeMonth}</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMultiDayExportOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportMultiDay}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition shadow-md cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download Multi-Day PDF</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Days List */}
         {filteredDays.length === 0 ? (
@@ -1118,6 +1318,21 @@ export default function ID2950Page() {
                     </div>
                   </div>
 
+                  {/* Quick Add Preset Apps */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5 pb-1">
+                    <span className="text-[11px] font-mono text-neutral-500 mr-1">Quick Add:</span>
+                    {['Facebook', 'YouTube', 'WhatsApp', 'ChatGPT', 'Chrome', 'Instagram'].map((appName) => (
+                      <button
+                        key={appName}
+                        type="button"
+                        onClick={() => handleAddAppUsage(day.id, appName)}
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white transition font-mono cursor-pointer"
+                      >
+                        + {appName}
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Quick Paste Modal / Textarea */}
                   {pasteWellbeingDayId === day.id && (
                     <div className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2 animate-fadeIn">
@@ -1144,7 +1359,7 @@ export default function ID2950Page() {
                           onClick={() =>
                             handleParseAndImportWellbeing(day.id, pasteWellbeingText)
                           }
-                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold"
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold cursor-pointer"
                         >
                           Import Apps
                         </button>
@@ -1154,44 +1369,58 @@ export default function ID2950Page() {
 
                   {/* App Usage Rows */}
                   {(!day.appUsage || day.appUsage.length === 0) ? (
-                    <p className="text-xs text-neutral-500 py-3 text-center font-mono">
-                      No mobile apps tracked for this day yet. Click "+ Add App" or "Paste / Import".
-                    </p>
+                    <div className="text-center py-5 border border-dashed border-neutral-850 rounded-xl px-4">
+                      <p className="text-xs text-neutral-400 font-mono">
+                        No mobile apps documented for this day yet.
+                      </p>
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Click a Quick Add button above, or click "+ Add App" to enter the App Name and Time manually from Digital Wellbeing.
+                      </p>
+                    </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {day.appUsage.map((app) => (
-                        <div
-                          key={app.id}
-                          className="flex items-center gap-2 p-2 rounded-xl bg-neutral-900 border border-neutral-800"
-                        >
-                          <input
-                            type="text"
-                            placeholder="App Name (e.g. YouTube)"
-                            value={app.appName}
-                            onChange={(e) =>
-                              handleUpdateAppUsage(day.id, app.id, 'appName', e.target.value)
-                            }
-                            className="flex-1 bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-neutral-200 outline-none"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Duration (e.g. 1h 30m)"
-                            value={app.duration}
-                            onChange={(e) =>
-                              handleUpdateAppUsage(day.id, app.id, 'duration', e.target.value)
-                            }
-                            className="w-28 bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-neutral-200 outline-none text-center"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveAppUsage(day.id, app.id)}
-                            className="text-neutral-500 hover:text-rose-400 p-1 text-xs"
-                            title="Remove app"
+                    <div className="space-y-2">
+                      {/* Column Labels */}
+                      <div className="grid grid-cols-12 gap-2 text-[10px] font-mono text-neutral-500 uppercase tracking-wider px-2">
+                        <div className="col-span-7 sm:col-span-7">App Name (e.g. Facebook)</div>
+                        <div className="col-span-4 sm:col-span-4 text-center">Time Spent (Digital Wellbeing)</div>
+                        <div className="col-span-1 text-right">✕</div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        {day.appUsage.map((app) => (
+                          <div
+                            key={app.id}
+                            className="flex items-center gap-2 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 shadow-sm"
                           >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
+                            <input
+                              type="text"
+                              placeholder="App Name (e.g. Facebook)"
+                              value={app.appName}
+                              onChange={(e) =>
+                                handleUpdateAppUsage(day.id, app.id, 'appName', e.target.value)
+                              }
+                              className="flex-1 bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-lg px-3 py-1.5 text-xs text-neutral-100 outline-none transition"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Time (e.g. 30m)"
+                              value={app.duration}
+                              onChange={(e) =>
+                                handleUpdateAppUsage(day.id, app.id, 'duration', e.target.value)
+                              }
+                              className="w-32 bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-lg px-2.5 py-1.5 text-xs font-mono text-neutral-100 outline-none text-center transition"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAppUsage(day.id, app.id)}
+                              className="text-neutral-500 hover:text-rose-400 p-1.5 text-xs rounded transition cursor-pointer"
+                              title="Remove app"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
