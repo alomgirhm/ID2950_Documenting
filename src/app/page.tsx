@@ -30,6 +30,14 @@ const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
 const MISSIONS_KEY = 'id2950_missions_v1';
 
 export const DEFAULT_MISSIONS = ['ID2950'];
+const FORBIDDEN_MISSIONS = ['coding', 'research', 'study', 'personal'];
+
+export function sanitizeMissionList(list: string[]): string[] {
+  const filtered = (list || []).filter(
+    (m) => Boolean(m && typeof m === 'string') && !FORBIDDEN_MISSIONS.includes(m.toLowerCase().trim())
+  );
+  return filtered.includes('ID2950') ? filtered : ['ID2950', ...filtered];
+}
 
 export const DHIKR_PRESETS = [
   'La ilaha illallah',
@@ -189,6 +197,7 @@ export default function ID2950Page() {
   const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
   const [missions, setMissions] = useState<string[]>(DEFAULT_MISSIONS);
+  const activeMissions = sanitizeMissionList(missions);
   const [isCreateMissionOpen, setIsCreateMissionOpen] = useState<boolean>(false);
   const [newMissionName, setNewMissionName] = useState<string>('');
   const [targetMissionEntry, setTargetMissionEntry] = useState<{ dayId: string; entryId: string } | null>(null);
@@ -250,7 +259,7 @@ export default function ID2950Page() {
   // Delete a mission from user's custom list
   const handleDeleteMission = (missionToDelete: string) => {
     if (missionToDelete === 'ID2950') return;
-    const filtered = missions.filter((m) => m !== missionToDelete);
+    const filtered = activeMissions.filter((m) => m !== missionToDelete);
     setMissions(filtered);
     try {
       localStorage.setItem(MISSIONS_KEY, JSON.stringify(filtered));
@@ -1044,7 +1053,7 @@ export default function ID2950Page() {
               title="Manage and create missions (e.g. ID2950, Coding)"
             >
               <Target className="w-3.5 h-3.5 text-amber-400" />
-              <span>Missions ({missions.length})</span>
+              <span>Missions ({activeMissions.length})</span>
             </button>
 
             {/* Collapse / Expand All Days Toggle */}
@@ -1336,12 +1345,12 @@ export default function ID2950Page() {
                 {/* Active Missions List */}
                 <div className="space-y-1.5 pt-1">
                   <div className="flex items-center justify-between text-[10px] uppercase font-mono tracking-wider text-neutral-400">
-                    <span>Active Missions ({missions.length})</span>
+                    <span>Active Missions ({activeMissions.length})</span>
                     <span className="text-neutral-600 font-normal">Click ✕ to remove</span>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-neutral-950/50 border border-neutral-850/80 max-h-32 overflow-y-auto">
-                    {missions.map((m) => {
+                    {activeMissions.map((m) => {
                       const isDefault = m === 'ID2950';
                       return (
                         <div
@@ -1699,7 +1708,7 @@ export default function ID2950Page() {
                             <option value="" className="bg-neutral-900 text-neutral-400">
                               🎯 Mission...
                             </option>
-                            {missions.map((m) => (
+                            {activeMissions.map((m) => (
                               <option key={m} value={m} className="bg-neutral-900 text-neutral-100 font-mono">
                                 🎯 {m}
                               </option>
@@ -1897,7 +1906,7 @@ export default function ID2950Page() {
                                 <option value="" className="bg-neutral-900 text-neutral-400">
                                   🎯 Mission...
                                 </option>
-                                {missions.map((m) => (
+                                {activeMissions.map((m) => (
                                   <option key={m} value={m} className="bg-neutral-900 text-neutral-100 font-mono">
                                     🎯 {m}
                                   </option>
