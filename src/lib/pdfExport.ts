@@ -217,6 +217,21 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(255, 255, 255);
     doc.text(timeText, margin + 6.5, y + 7.8);
 
+    // Mission badge if present
+    if (entry.mission) {
+      const missionText = `Mission: ${entry.mission}`;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const mWidth = doc.getTextWidth(missionText) + 5;
+      const mX = margin + 4 + badgeWidth + 2.5;
+      doc.setFillColor(254, 243, 199); // warm light amber
+      doc.setDrawColor(217, 119, 6);   // amber border
+      doc.setLineWidth(0.2);
+      doc.roundedRect(mX, y + 3.5, mWidth, 6.5, 1.5, 1.5, 'FD');
+      doc.setTextColor(180, 83, 9);
+      doc.text(missionText, mX + 2.5, y + 7.8);
+    }
+
     // Session index label on the right
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
@@ -412,9 +427,10 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setFontSize(11);
   doc.setTextColor(25, 30, 45);
   const duration = calculateDuration(entry.startTime, entry.endTime);
+  const missionDisplay = entry.mission ? `   |   Mission: ${entry.mission}` : '';
   const timeDisplay = duration
-    ? `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}   (Duration: ${duration})`
-    : `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}`;
+    ? `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
+    : `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}${missionDisplay}`;
   doc.text(timeDisplay, margin + 4, y + 12.5);
 
   y += 24;
@@ -634,6 +650,21 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.roundedRect(margin + 4, y + 3.5, badgeWidth, 6.5, 1.5, 1.5, 'F');
         doc.setTextColor(255, 255, 255);
         doc.text(timeText, margin + 6.5, y + 7.8);
+
+        // Mission badge if present
+        if (entry.mission) {
+          const missionText = `Mission: ${entry.mission}`;
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(7.5);
+          const mWidth = doc.getTextWidth(missionText) + 5;
+          const mX = margin + 4 + badgeWidth + 2.5;
+          doc.setFillColor(254, 243, 199); // warm light amber
+          doc.setDrawColor(217, 119, 6);   // amber border
+          doc.setLineWidth(0.2);
+          doc.roundedRect(mX, y + 3.5, mWidth, 6.5, 1.5, 1.5, 'FD');
+          doc.setTextColor(180, 83, 9);
+          doc.text(missionText, mX + 2.5, y + 7.8);
+        }
 
         // Session index label on the right
         doc.setFont('helvetica', 'normal');

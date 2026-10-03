@@ -18,7 +18,8 @@ import {
   Upload, 
   Smartphone, 
   ClipboardPaste, 
-  Files 
+  Files,
+  Target 
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
@@ -26,6 +27,9 @@ import { calculateDuration, calculateDayTotalDuration } from '@/lib/timeUtils';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
+const MISSIONS_KEY = 'id2950_missions_v1';
+
+export const DEFAULT_MISSIONS = ['ID2950', 'Coding', 'Research', 'Study', 'Personal'];
 
 export const DHIKR_PRESETS = [
   'La ilaha illallah',
@@ -183,6 +187,10 @@ export default function ID2950Page() {
   const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
   const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
+  const [missions, setMissions] = useState<string[]>(DEFAULT_MISSIONS);
+  const [isCreateMissionOpen, setIsCreateMissionOpen] = useState<boolean>(false);
+  const [newMissionName, setNewMissionName] = useState<string>('');
+  const [targetMissionEntry, setTargetMissionEntry] = useState<{ dayId: string; entryId: string } | null>(null);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
   // Toggle Day card collapse / dropdown
@@ -202,6 +210,50 @@ export default function ID2950Page() {
       ...prev,
       [dayId]: !prev[dayId],
     }));
+  };
+
+  // Open Create Mission modal (optionally targeted for a specific time block)
+  const handleOpenCreateMission = (dayId?: string, entryId?: string) => {
+    if (dayId && entryId) {
+      setTargetMissionEntry({ dayId, entryId });
+    } else {
+      setTargetMissionEntry(null);
+    }
+    setNewMissionName('');
+    setIsCreateMissionOpen(true);
+  };
+
+  // Save new mission and apply to entry if targeted
+  const handleSaveNewMission = (nameToAdd?: string) => {
+    const trimmed = (nameToAdd || newMissionName).trim();
+    if (!trimmed) return;
+
+    let updatedMissions = [...missions];
+    if (!missions.some((m) => m.toLowerCase() === trimmed.toLowerCase())) {
+      updatedMissions = [...missions, trimmed];
+      setMissions(updatedMissions);
+      try {
+        localStorage.setItem(MISSIONS_KEY, JSON.stringify(updatedMissions));
+      } catch {}
+    }
+
+    if (targetMissionEntry) {
+      handleUpdateEntry(targetMissionEntry.dayId, targetMissionEntry.entryId, 'mission', trimmed);
+    }
+
+    setIsCreateMissionOpen(false);
+    setNewMissionName('');
+    setTargetMissionEntry(null);
+  };
+
+  // Delete a mission from user's custom list
+  const handleDeleteMission = (missionToDelete: string) => {
+    if (missionToDelete === 'ID2950') return;
+    const filtered = missions.filter((m) => m !== missionToDelete);
+    setMissions(filtered);
+    try {
+      localStorage.setItem(MISSIONS_KEY, JSON.stringify(filtered));
+    } catch {}
   };
 
   // Multi-Day PDF Export states
@@ -245,6 +297,19 @@ export default function ID2950Page() {
       const savedCollapsed = localStorage.getItem(COLLAPSED_DAYS_KEY);
       if (savedCollapsed) {
         setCollapsedDays(JSON.parse(savedCollapsed));
+      }
+
+      // Load custom missions state
+      const savedMissions = localStorage.getItem(MISSIONS_KEY);
+      if (savedMissions) {
+        try {
+          const parsedMissions = JSON.parse(savedMissions);
+          if (Array.isArray(parsedMissions) && parsedMissions.length > 0) {
+            setMissions(parsedMissions);
+          }
+        } catch {}
+      } else {
+        localStorage.setItem(MISSIONS_KEY, JSON.stringify(DEFAULT_MISSIONS));
       }
     } catch {
       setDays(DEFAULT_DAYS);
@@ -305,6 +370,7 @@ export default function ID2950Page() {
           id: `entry-${Date.now()}-1`,
           startTime: '',
           endTime: '',
+          mission: 'ID2950',
           work: '',
           notes: '',
         },
@@ -353,6 +419,7 @@ export default function ID2950Page() {
         id: newEntryId,
         startTime: '',
         endTime: '',
+        mission: 'ID2950',
         work: '',
         notes: '',
       };
@@ -370,7 +437,7 @@ export default function ID2950Page() {
   const handleUpdateEntry = (
     dayId: string,
     entryId: string,
-    field: 'startTime' | 'endTime' | 'work' | 'notes',
+    field: 'startTime' | 'endTime' | 'work' | 'notes' | 'mission',
     value: string
   ) => {
     const updated = days.map((d) => {
@@ -693,19 +760,20 @@ export default function ID2950Page() {
     saveDays(updated);
   };
 
-  // Copy day entries to clipboard as clean text (with multiple numbered works & notes)
+  // Copy day entries to clipboard as clean text (with multiple numbered works, mission & notes)
   const handleCopyDay = (day: DayLog) => {
     let text = `${day.name || 'Untitled Day'} (${day.month})\n`;
     text += '====================================\n';
     day.entries.forEach((e) => {
       const works = getWorksList(e).filter((w) => w.trim().length > 0);
+      const missionPrefix = e.mission ? `[🎯 ${e.mission}] ` : '';
       if (works.length > 1) {
-        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}]\n`;
+        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${missionPrefix}\n`;
         works.forEach((w, i) => {
           text += `   ${i + 1}. ${w}\n`;
         });
       } else {
-        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${works[0] || e.work || '(no work specified)'}\n`;
+        text += `[${e.startTime || '--:--'} - ${e.endTime || '--:--'}] ${missionPrefix}${works[0] || e.work || '(no work specified)'}\n`;
       }
       if (e.notes && e.notes.trim()) {
         const indentedNotes = e.notes
@@ -762,9 +830,10 @@ export default function ID2950Page() {
     try {
       const dataToSave = {
         app: 'ID2950_Documenting',
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         totalDays: days.length,
+        missions: missions,
         days: days,
       };
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
@@ -825,6 +894,23 @@ export default function ID2950Page() {
                 : app.duration,
           })),
         }));
+
+        // Restore custom missions or extract unique missions
+        if (parsed.missions && Array.isArray(parsed.missions) && parsed.missions.length > 0) {
+          const merged = Array.from(new Set([...DEFAULT_MISSIONS, ...parsed.missions]));
+          setMissions(merged);
+          localStorage.setItem(MISSIONS_KEY, JSON.stringify(merged));
+        } else {
+          const extracted = new Set<string>(DEFAULT_MISSIONS);
+          importedDays.forEach((d) =>
+            d.entries?.forEach((e) => {
+              if (e.mission?.trim()) extracted.add(e.mission.trim());
+            })
+          );
+          const list = Array.from(extracted);
+          setMissions(list);
+          localStorage.setItem(MISSIONS_KEY, JSON.stringify(list));
+        }
 
         saveDays(cleaned);
         if (cleaned.length > 0 && cleaned[0].month) {
@@ -935,6 +1021,17 @@ export default function ID2950Page() {
             >
               <Files className="w-3.5 h-3.5 text-amber-400" />
               <span>Multi-Day PDF</span>
+            </button>
+
+            {/* Missions Manager Button */}
+            <button
+              type="button"
+              onClick={() => handleOpenCreateMission()}
+              className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3.5 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium shadow-sm cursor-pointer"
+              title="Manage and create missions (e.g. ID2950, Coding)"
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400" />
+              <span>Missions ({missions.length})</span>
             </button>
 
             {/* Collapse / Expand All Days Toggle */}
@@ -1156,6 +1253,106 @@ export default function ID2950Page() {
             </div>
           </div>
         )}
+
+        {/* Create / Manage Mission Modal */}
+        {isCreateMissionOpen && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Target className="w-4 h-4" />
+                  </div>
+                  <h3 className="text-sm font-bold text-neutral-100 font-mono">Create New Mission</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMissionOpen(false);
+                    setNewMissionName('');
+                    setTargetMissionEntry(null);
+                  }}
+                  className="text-neutral-500 hover:text-neutral-300 text-sm p-1 rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-mono text-neutral-400 block mb-1.5">
+                  Mission / Project Name:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="e.g. ID2950, Client Work, Learning..."
+                  value={newMissionName}
+                  onChange={(e) => setNewMissionName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSaveNewMission();
+                    }
+                  }}
+                  className="w-full bg-neutral-950 border border-neutral-750 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs text-neutral-100 font-mono outline-none"
+                />
+                <p className="text-[10px] text-neutral-500 mt-1">
+                  Once added, this mission will appear in the dropdown for all time blocks.
+                </p>
+              </div>
+
+              {/* Current Missions Chips */}
+              <div>
+                <label className="text-[10px] font-mono text-neutral-500 block mb-1.5">
+                  Available Missions:
+                </label>
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                  {missions.map((m) => (
+                    <span
+                      key={m}
+                      className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 flex items-center gap-1.5"
+                    >
+                      <span>🎯 {m}</span>
+                      {m !== 'ID2950' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMission(m)}
+                          className="text-neutral-500 hover:text-rose-400 text-xs leading-none ml-0.5"
+                          title={`Delete "${m}"`}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateMissionOpen(false);
+                    setNewMissionName('');
+                    setTargetMissionEntry(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveNewMission()}
+                  disabled={!newMissionName.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none text-neutral-950 font-bold text-xs transition shadow-md cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Save Mission</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Days List */}
         {filteredDays.length === 0 ? (
@@ -1324,9 +1521,14 @@ export default function ID2950Page() {
                         return (
                           <span
                             key={entry.id || idx}
-                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800"
+                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800 flex items-center gap-1.5"
                           >
-                            [{entry.startTime || '--:--'} - {entry.endTime || '--:--'}{dur ? ` • ${dur}` : ''}]
+                            <span>[{entry.startTime || '--:--'} - {entry.endTime || '--:--'}{dur ? ` • ${dur}` : ''}]</span>
+                            {entry.mission && (
+                              <span className="text-[10px] px-1 py-0.2 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40 font-semibold">
+                                🎯 {entry.mission}
+                              </span>
+                            )}
                           </span>
                         );
                       })}
@@ -1359,13 +1561,14 @@ export default function ID2950Page() {
                     <div className="space-y-3.5">
                 
                 {/* Column Headers for Medium & Wide screens */}
-                <div className="hidden sm:grid grid-cols-12 gap-3 text-[11px] font-mono uppercase tracking-wider text-neutral-500 px-1 pb-1">
-                  <div className="col-span-2 lg:col-span-2 text-center">Start Time</div>
-                  <div className="col-span-2 lg:col-span-2 text-center">End Time</div>
-                  <div className="col-span-2 lg:col-span-2 text-center">Duration</div>
-                  <div className="col-span-4 lg:col-span-4">What work I do</div>
-                  <div className="col-span-1 lg:col-span-1 text-center">Notes</div>
-                  <div className="col-span-1 lg:col-span-1 text-right">Remove</div>
+                <div className="hidden sm:grid grid-cols-[90px_90px_85px_135px_1fr_42px_36px] gap-2.5 text-[11px] font-mono uppercase tracking-wider text-neutral-500 px-3 pb-1">
+                  <div className="text-center">Start</div>
+                  <div className="text-center">End</div>
+                  <div className="text-center">Duration</div>
+                  <div>Mission</div>
+                  <div>What work I do</div>
+                  <div className="text-center">Notes</div>
+                  <div className="text-right">✕</div>
                 </div>
 
                 {/* Rows with editable input boxes and collapsible notes */}
@@ -1381,10 +1584,10 @@ export default function ID2950Page() {
                     >
                       
                       {/* Desktop / Wide layout (sm and up) */}
-                      <div className="hidden sm:grid grid-cols-12 gap-3 items-center p-3">
+                      <div className="hidden sm:grid grid-cols-[90px_90px_85px_135px_1fr_42px_36px] gap-2.5 items-center p-3">
                         
                         {/* Start Time Box */}
-                        <div className="col-span-2 lg:col-span-2">
+                        <div>
                           <input
                             type="text"
                             placeholder="Start"
@@ -1395,12 +1598,12 @@ export default function ID2950Page() {
                             onBlur={(e) =>
                               handleUpdateTime(day.id, entry.id, 'startTime', e.target.value, true)
                             }
-                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
+                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-2.5 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
                           />
                         </div>
 
                         {/* End Time Box */}
-                        <div className="col-span-2 lg:col-span-2">
+                        <div>
                           <input
                             type="text"
                             placeholder="End"
@@ -1411,14 +1614,14 @@ export default function ID2950Page() {
                             onBlur={(e) =>
                               handleUpdateTime(day.id, entry.id, 'endTime', e.target.value, true)
                             }
-                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-3 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
+                            className="w-full bg-neutral-950 border border-neutral-800 focus:border-neutral-600 rounded-xl px-2.5 py-2 text-xs sm:text-sm font-mono text-neutral-200 outline-none transition text-center"
                           />
                         </div>
 
                         {/* Automatic Calculated Duration Box */}
-                        <div className="col-span-2 lg:col-span-2 flex items-center justify-center">
+                        <div className="flex items-center justify-center">
                           <div
-                            className={`w-full py-2 px-2 rounded-xl border text-xs sm:text-sm font-mono flex items-center justify-center gap-1.5 transition select-none ${
+                            className={`w-full py-2 px-1 rounded-xl border text-xs sm:text-sm font-mono flex items-center justify-center gap-1 transition select-none ${
                               sessionDuration
                                 ? 'bg-amber-950/30 border-amber-800/50 text-amber-300 font-semibold shadow-sm'
                                 : 'bg-neutral-950/60 border-neutral-800/70 text-neutral-600'
@@ -1426,12 +1629,48 @@ export default function ID2950Page() {
                             title={sessionDuration ? `Duration: ${sessionDuration}` : 'Calculated automatically from Start & End Time'}
                           >
                             <span className="text-xs opacity-75">⏱️</span>
-                            <span>{sessionDuration || '--'}</span>
+                            <span className="truncate">{sessionDuration || '--'}</span>
+                          </div>
+                        </div>
+
+                        {/* Mission Dropdown Selector */}
+                        <div className="relative">
+                          <select
+                            value={entry.mission || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '__CREATE_NEW__') {
+                                handleOpenCreateMission(day.id, entry.id);
+                              } else {
+                                handleUpdateEntry(day.id, entry.id, 'mission', val);
+                              }
+                            }}
+                            className={`w-full appearance-none bg-neutral-950 border focus:border-amber-500 rounded-xl px-2.5 py-2 text-xs font-mono outline-none transition cursor-pointer truncate pr-5 ${
+                              entry.mission
+                                ? 'border-amber-800/60 text-amber-300 font-semibold bg-amber-950/20'
+                                : 'border-neutral-800 text-neutral-400'
+                            }`}
+                            title={entry.mission ? `Mission: ${entry.mission}` : 'Select or assign a Mission'}
+                          >
+                            <option value="" className="bg-neutral-900 text-neutral-400">
+                              🎯 Mission...
+                            </option>
+                            {missions.map((m) => (
+                              <option key={m} value={m} className="bg-neutral-900 text-neutral-100 font-mono">
+                                🎯 {m}
+                              </option>
+                            ))}
+                            <option value="__CREATE_NEW__" className="bg-neutral-900 text-amber-400 font-bold">
+                              ✨ + New Mission...
+                            </option>
+                          </select>
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500 text-[9px]">
+                            ▼
                           </div>
                         </div>
 
                         {/* What Work I Do Box (Multiple Numbered Works Supported) */}
-                        <div className="col-span-4 lg:col-span-4 space-y-2">
+                        <div className="space-y-2">
                           {getWorksList(entry).map((workItem, wIdx, arr) => (
                             <div key={wIdx} className="flex items-center gap-2">
                               <span className="text-[11px] font-mono font-bold text-neutral-400 bg-neutral-900 border border-neutral-800 rounded-lg px-2 py-1.5 min-w-[26px] text-center select-none flex-shrink-0">
@@ -1477,7 +1716,7 @@ export default function ID2950Page() {
                         </div>
 
                         {/* Dropable Notes Toggle Button */}
-                        <div className="col-span-1 lg:col-span-1 flex justify-center">
+                        <div className="flex justify-center">
                           <button
                             type="button"
                             onClick={() => toggleNotes(entry.id)}
@@ -1498,7 +1737,7 @@ export default function ID2950Page() {
                         </div>
 
                         {/* Remove Entry */}
-                        <div className="col-span-1 lg:col-span-1 text-right">
+                        <div className="text-right">
                           <button
                             onClick={() => handleDeleteEntry(day.id, entry.id)}
                             className="text-neutral-500 hover:text-rose-400 p-2 text-sm rounded-lg hover:bg-neutral-800 transition"
@@ -1576,15 +1815,58 @@ export default function ID2950Page() {
                           </div>
                         </div>
 
-                        {/* Auto Calculated Duration Box on Mobile */}
-                        <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-neutral-900/80 border border-neutral-800 text-xs font-mono">
-                          <span className="text-neutral-400 flex items-center gap-1.5 text-[11px]">
-                            <span>⏱️</span>
-                            <span>Duration:</span>
-                          </span>
-                          <span className={`font-semibold ${sessionDuration ? 'text-amber-300' : 'text-neutral-600'}`}>
-                            {sessionDuration || 'Enter start & end'}
-                          </span>
+                        {/* Duration and Mission side-by-side on Mobile */}
+                        <div className="grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-5">
+                            <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
+                              Duration
+                            </label>
+                            <div className="flex items-center justify-between px-2.5 py-2 rounded-xl bg-neutral-900/80 border border-neutral-800 text-xs font-mono">
+                              <span className="text-neutral-500 text-[10px]">⏱️</span>
+                              <span className={`font-semibold text-xs truncate ${sessionDuration ? 'text-amber-300' : 'text-neutral-600'}`}>
+                                {sessionDuration || '--'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="col-span-7">
+                            <label className="text-[10px] uppercase font-mono text-neutral-500 block mb-1">
+                              Mission
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={entry.mission || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '__CREATE_NEW__') {
+                                    handleOpenCreateMission(day.id, entry.id);
+                                  } else {
+                                    handleUpdateEntry(day.id, entry.id, 'mission', val);
+                                  }
+                                }}
+                                className={`w-full appearance-none bg-neutral-900 border focus:border-amber-500 rounded-xl px-2.5 py-2 text-xs font-mono outline-none transition cursor-pointer truncate pr-5 ${
+                                  entry.mission
+                                    ? 'border-amber-800/60 text-amber-300 font-semibold bg-amber-950/20'
+                                    : 'border-neutral-800 text-neutral-400'
+                                }`}
+                              >
+                                <option value="" className="bg-neutral-900 text-neutral-400">
+                                  🎯 Mission...
+                                </option>
+                                {missions.map((m) => (
+                                  <option key={m} value={m} className="bg-neutral-900 text-neutral-100 font-mono">
+                                    🎯 {m}
+                                  </option>
+                                ))}
+                                <option value="__CREATE_NEW__" className="bg-neutral-900 text-amber-400 font-bold">
+                                  ✨ + New Mission...
+                                </option>
+                              </select>
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-500 text-[9px]">
+                                ▼
+                              </div>
+                            </div>
+                          </div>
                         </div>
 
                         {/* What Work I Do on mobile (with numbered works) */}

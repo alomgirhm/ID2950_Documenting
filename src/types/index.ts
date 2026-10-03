@@ -2,6 +2,7 @@ export interface TimeEntry {
   id: string;
   startTime: string; // e.g. "3:00"
   endTime: string;   // e.g. "4:00"
+  mission?: string;  // e.g. "ID2950", "Coding", or custom user-created mission
   work: string;      // main work or summary
   works?: string[];  // multiple numbered works in the same session: ["Work 1", "Work 2", ...]
   notes?: string;    // collapsible notes / learnings from video, book, or work
