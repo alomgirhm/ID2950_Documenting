@@ -1,18 +1,20 @@
 @echo off
-setlocal
 cd /d "E:\ID2950"
 
-:: 1. Check if server is already running on port 3000
-netstat -ano | findstr "LISTENING" | findstr ":3000" >nul
+:: 1. Check if server is already listening on port 3000
+netstat -ano | findstr ":3000" | findstr "LISTENING" >nul
 if %errorlevel% neq 0 (
-    start /min "" cmd /c "npx next start -p 3000"
-    timeout /t 2 /nobreak >nul
+    :: Start production server in background
+    start "ID2950_Server" /min cmd /c "npx next start -p 3000"
+    
+    :: Loop and wait until port 3000 is actually listening
+    for /L %%i in (1,1,15) do (
+        timeout /t 1 /nobreak >nul
+        netstat -ano | findstr ":3000" | findstr "LISTENING" >nul
+        if not errorlevel 1 goto :server_ready
+    )
 )
 
-:: 2. Launch Chrome in Desktop App Window mode
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --app="http://localhost:3000"
-
-:: 3. Once user closes the Chrome window, automatically turn off the server on port 3000
-for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":3000" ^| findstr "LISTENING"') do (
-    taskkill /f /pid %%a >nul 2>&1
-)
+:server_ready
+:: 2. Open Chrome in standalone desktop window
+start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --app="http://localhost:3000"
