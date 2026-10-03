@@ -276,6 +276,7 @@ export default function ID2950Page() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
+      let currentDays: DayLog[] = DEFAULT_DAYS;
       if (stored) {
         const parsed: DayLog[] = JSON.parse(stored);
         const cleaned: DayLog[] = parsed.map((d) => ({
@@ -294,19 +295,33 @@ export default function ID2950Page() {
                 : app.duration,
           })),
         }));
+        currentDays = cleaned;
         setDays(cleaned);
-        if (cleaned.length > 0 && cleaned[0].month) {
-          setActiveMonth(cleaned[0].month);
-        }
       } else {
         setDays(DEFAULT_DAYS);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DAYS));
       }
 
-      // Load collapsed days state
-      const savedCollapsed = localStorage.getItem(COLLAPSED_DAYS_KEY);
-      if (savedCollapsed) {
-        setCollapsedDays(JSON.parse(savedCollapsed));
+      // Automatically focus on the last day assigned by the user
+      if (currentDays.length > 0) {
+        const lastDay = currentDays[currentDays.length - 1];
+        if (lastDay.month) {
+          setActiveMonth(lastDay.month);
+        }
+
+        // Collapse all completed/previous days and open the latest assigned day
+        const initialCollapsed: Record<string, boolean> = {};
+        currentDays.forEach((d, idx) => {
+          if (idx === currentDays.length - 1) {
+            initialCollapsed[d.id] = false; // Latest day assigned is open
+          } else {
+            initialCollapsed[d.id] = true;  // Older days closed to save space
+          }
+        });
+        setCollapsedDays(initialCollapsed);
+        try {
+          localStorage.setItem(COLLAPSED_DAYS_KEY, JSON.stringify(initialCollapsed));
+        } catch {}
       }
 
       // Load custom missions state
@@ -398,6 +413,19 @@ export default function ID2950Page() {
     const updated = [...days, newDay];
     saveDays(updated);
     setNewDayName('');
+
+    // Collapse all previous days, auto-expand the newly assigned day
+    setCollapsedDays((prev) => {
+      const next: Record<string, boolean> = { ...prev };
+      days.forEach((d) => {
+        next[d.id] = true;
+      });
+      next[newDay.id] = false;
+      try {
+        localStorage.setItem(COLLAPSED_DAYS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
 
   // Delete a Day
@@ -1422,14 +1450,14 @@ export default function ID2950Page() {
             return (
               <section
                 key={day.id}
-                className={`border rounded-2xl p-4 sm:p-6 lg:p-7 transition-all shadow-sm ${
+                className={`border transition-all shadow-sm ${
                   isDayCollapsed
-                    ? 'bg-neutral-950/60 border-neutral-850 hover:border-neutral-800'
-                    : 'bg-neutral-900/40 border-neutral-850 hover:border-neutral-800'
+                    ? 'p-3 sm:p-3.5 rounded-xl bg-neutral-950/60 border-neutral-850 hover:border-neutral-800'
+                    : 'p-4 sm:p-6 lg:p-7 rounded-2xl bg-neutral-900/40 border-neutral-850 hover:border-neutral-800'
                 }`}
               >
                 {/* Day Header with user-assigned name */}
-                <div className={`flex flex-col sm:flex-row sm:items-center justify-between pb-3 sm:pb-4 border-b border-neutral-800/80 gap-3 ${isDayCollapsed ? 'mb-0' : 'mb-4 sm:mb-5'}`}>
+                <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${isDayCollapsed ? 'border-b-0 pb-0 mb-0' : 'pb-3 sm:pb-4 border-b border-neutral-800/80 mb-4 sm:mb-5'}`}>
                   <div className="flex items-center gap-2 flex-1">
                     {editingDayId === day.id ? (
                       <div className="flex items-center gap-2 flex-1 max-w-md">
@@ -1560,56 +1588,9 @@ export default function ID2950Page() {
                   </div>
                 </div>
 
-                {/* If Collapsed, show sleek compact preview bar */}
-                {isDayCollapsed ? (
-                  <div
-                    onClick={() => toggleDayCollapse(day.id)}
-                    className="mt-3 p-3 sm:p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-850 hover:border-amber-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer transition group"
-                    title="Click to open and view all entries for this day"
-                  >
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      {day.entries.map((entry, idx) => {
-                        if (!entry.startTime && !entry.endTime && !entry.work) return null;
-                        const dur = calculateDuration(entry.startTime, entry.endTime);
-                        return (
-                          <span
-                            key={entry.id || idx}
-                            className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-neutral-900 text-neutral-300 border border-neutral-800 flex items-center gap-1.5"
-                          >
-                            <span>[{entry.startTime || '--:--'} - {entry.endTime || '--:--'}{dur ? ` • ${dur}` : ''}]</span>
-                            {entry.mission && (
-                              <span className="text-[10px] px-1 py-0.2 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40 font-semibold">
-                                🎯 {entry.mission}
-                              </span>
-                            )}
-                          </span>
-                        );
-                      })}
-
-                      {day.entries[0]?.work && (
-                        <span className="text-xs text-neutral-400 truncate max-w-sm sm:max-w-md">
-                          {day.entries[0].work}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 text-neutral-500 group-hover:text-amber-300 font-mono text-[11px] transition shrink-0">
-                      {day.dhikrList && day.dhikrList.some((d) => d.count?.trim()) && (
-                        <span className="px-1.5 py-0.5 rounded bg-amber-950/40 text-amber-300 border border-amber-800/40">
-                          📿 Dhikr
-                        </span>
-                      )}
-                      {day.appUsage && day.appUsage.length > 0 && (
-                        <span className="px-1.5 py-0.5 rounded bg-indigo-950/40 text-indigo-300 border border-indigo-800/40">
-                          📱 {day.appUsage.length} apps
-                        </span>
-                      )}
-                      <span className="text-xs font-medium ml-1">Click to open day</span>
-                      <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
-                    </div>
-                  </div>
-                ) : (
-                  <>
+                {/* Expanded Day Content (Hidden completely when day is collapsed/closed) */}
+                {!isDayCollapsed && (
+                  <div>
                     {/* Time Entries Table / Boxes */}
                     <div className="space-y-3.5">
                 
@@ -2375,7 +2356,7 @@ export default function ID2950Page() {
                   </div>
                 </div>
               )}
-                  </>
+                  </div>
                 )}
               </section>
             );
