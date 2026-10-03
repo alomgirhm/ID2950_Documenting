@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
-import { calculateDuration, calculateDayTotalDuration } from '@/lib/timeUtils';
+import { calculateDuration, calculateDayTotalDuration, calculateMissionDurations } from '@/lib/timeUtils';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
@@ -848,6 +848,18 @@ export default function ID2950Page() {
       }
     }
 
+    const totalDayTime = calculateDayTotalDuration(day.entries);
+    const missionTimes = calculateMissionDurations(day.entries);
+    if (totalDayTime) {
+      text += `\n⏱ Total Productive Time: ${totalDayTime}\n`;
+      if (missionTimes.length > 0) {
+        text += '🎯 Missions Breakdown:\n';
+        missionTimes.forEach((m) => {
+          text += `   • ${m.mission}: ${m.duration}\n`;
+        });
+      }
+    }
+
     navigator.clipboard.writeText(text).then(() => {
       setCopiedDayId(day.id);
       setTimeout(() => setCopiedDayId(null), 2000);
@@ -1446,6 +1458,8 @@ export default function ID2950Page() {
         ) : (
           filteredDays.map((day) => {
             const isDayCollapsed = !!collapsedDays[day.id];
+            const dayTotal = calculateDayTotalDuration(day.entries);
+            const missionDurations = calculateMissionDurations(day.entries);
 
             return (
               <section
@@ -1507,19 +1521,30 @@ export default function ID2950Page() {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-3 pt-1 sm:pt-0">
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between sm:justify-end gap-2.5 pt-1 sm:pt-0 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-xs font-mono text-neutral-500">
                         {day.entries.length} {day.entries.length === 1 ? 'block' : 'blocks'}
                       </span>
-                      {calculateDayTotalDuration(day.entries) && (
+                      {dayTotal && (
                         <span
-                          className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 border border-amber-800/40 font-semibold"
-                          title="Total productive hours logged for this day"
+                          className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-amber-950/40 text-amber-300 border border-amber-800/40 font-semibold shadow-xs"
+                          title="Total productive hours logged for this day across all missions"
                         >
-                          Total: {calculateDayTotalDuration(day.entries)}
+                          Total: {dayTotal}
                         </span>
                       )}
+                      {missionDurations.map((md) => (
+                        <span
+                          key={md.mission}
+                          className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-neutral-900/90 text-amber-300 border border-neutral-800 hover:border-amber-750/50 flex items-center gap-1.5 transition shadow-xs"
+                          title={`Total time logged under mission "${md.mission}" for this day`}
+                        >
+                          <span className="text-[10px] text-amber-400">🎯</span>
+                          <span className="text-neutral-400 font-medium">{md.mission}:</span>
+                          <span className="font-semibold text-white">{md.duration}</span>
+                        </span>
+                      ))}
                     </div>
 
                     <div className="flex items-center gap-1.5">

@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { DayLog, TimeEntry } from '@/types';
-import { calculateDuration, calculateDayTotalDuration } from '@/lib/timeUtils';
+import { calculateDuration, calculateDayTotalDuration, calculateMissionDurations } from '@/lib/timeUtils';
 
 function getFormattedWorkLines(entry: TimeEntry): string {
   if (entry.works && entry.works.length > 0) {
@@ -150,8 +150,10 @@ export function downloadDayPDF(day: DayLog) {
     minute: '2-digit',
   });
   const totalDayTime = calculateDayTotalDuration(day.entries);
+  const missionTimes = calculateMissionDurations(day.entries);
+  const missionStr = missionTimes.map((m) => `${m.mission}: ${m.duration}`).join('   |   ');
   doc.text(
-    `Month: ${day.month}   |   Exported: ${timeStamp}${totalDayTime ? `   |   Total Time: ${totalDayTime}` : ''}`,
+    `Month: ${day.month}   |   Exported: ${timeStamp}${totalDayTime ? `   |   Total: ${totalDayTime}` : ''}${missionStr ? `   |   ${missionStr}` : ''}`,
     margin,
     y + 5
   );
