@@ -29,7 +29,7 @@ const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
 const MISSIONS_KEY = 'id2950_missions_v1';
 
-export const DEFAULT_MISSIONS = ['ID2950', 'Coding', 'Research', 'Study', 'Personal'];
+export const DEFAULT_MISSIONS = ['ID2950'];
 
 export const DHIKR_PRESETS = [
   'La ilaha illallah',
@@ -63,6 +63,7 @@ const DEFAULT_DAYS: DayLog[] = [
         id: 'entry-1',
         startTime: '',
         endTime: '',
+        mission: 'ID2950',
         work: '',
         notes: '',
       },
@@ -300,12 +301,18 @@ export default function ID2950Page() {
       }
 
       // Load custom missions state
+      const REMOVED_PRESETS = ['coding', 'research', 'study', 'personal'];
       const savedMissions = localStorage.getItem(MISSIONS_KEY);
       if (savedMissions) {
         try {
           const parsedMissions = JSON.parse(savedMissions);
           if (Array.isArray(parsedMissions) && parsedMissions.length > 0) {
-            setMissions(parsedMissions);
+            const cleaned = parsedMissions.filter(
+              (m: string) => !REMOVED_PRESETS.includes(m.toLowerCase().trim())
+            );
+            const finalList = cleaned.includes('ID2950') ? cleaned : ['ID2950', ...cleaned];
+            setMissions(finalList);
+            localStorage.setItem(MISSIONS_KEY, JSON.stringify(finalList));
           }
         } catch {}
       } else {
@@ -896,15 +903,21 @@ export default function ID2950Page() {
         }));
 
         // Restore custom missions or extract unique missions
+        const REMOVED_PRESETS = ['coding', 'research', 'study', 'personal'];
         if (parsed.missions && Array.isArray(parsed.missions) && parsed.missions.length > 0) {
-          const merged = Array.from(new Set([...DEFAULT_MISSIONS, ...parsed.missions]));
+          const cleaned = parsed.missions.filter(
+            (m: string) => !REMOVED_PRESETS.includes(m.toLowerCase().trim())
+          );
+          const merged = Array.from(new Set(['ID2950', ...cleaned]));
           setMissions(merged);
           localStorage.setItem(MISSIONS_KEY, JSON.stringify(merged));
         } else {
-          const extracted = new Set<string>(DEFAULT_MISSIONS);
+          const extracted = new Set<string>(['ID2950']);
           importedDays.forEach((d) =>
             d.entries?.forEach((e) => {
-              if (e.mission?.trim()) extracted.add(e.mission.trim());
+              if (e.mission?.trim() && !REMOVED_PRESETS.includes(e.mission.toLowerCase().trim())) {
+                extracted.add(e.mission.trim());
+              }
             })
           );
           const list = Array.from(extracted);
@@ -1254,101 +1267,132 @@ export default function ID2950Page() {
           </div>
         )}
 
-        {/* Create / Manage Mission Modal */}
+        {/* Minimalistic & Designed Create / Manage Mission Modal */}
         {isCreateMissionOpen && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                    <Target className="w-4 h-4" />
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="relative bg-neutral-900/95 border border-neutral-800/90 rounded-2xl max-w-sm w-full shadow-[0_25px_60px_rgba(0,0,0,0.85)] overflow-hidden">
+              
+              {/* Subtle Ambient Gold Top Glow */}
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-amber-400/80 to-transparent" />
+
+              <div className="p-5 sm:p-6 space-y-4">
+                
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shadow-inner">
+                      <Target className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold tracking-tight text-neutral-100">
+                        Mission Manager
+                      </h3>
+                      <p className="text-[11px] font-mono text-neutral-500">
+                        Categorize your productivity
+                      </p>
+                    </div>
                   </div>
-                  <h3 className="text-sm font-bold text-neutral-100 font-mono">Create New Mission</h3>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateMissionOpen(false);
+                      setNewMissionName('');
+                      setTargetMissionEntry(null);
+                    }}
+                    className="text-neutral-500 hover:text-neutral-200 p-1.5 rounded-lg hover:bg-neutral-800/60 transition"
+                    title="Close"
+                  >
+                    ✕
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreateMissionOpen(false);
-                    setNewMissionName('');
-                    setTargetMissionEntry(null);
-                  }}
-                  className="text-neutral-500 hover:text-neutral-300 text-sm p-1 rounded-lg"
-                >
-                  ✕
-                </button>
-              </div>
 
-              <div>
-                <label className="text-[11px] font-mono text-neutral-400 block mb-1.5">
-                  Mission / Project Name:
-                </label>
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="e.g. ID2950, Client Work, Learning..."
-                  value={newMissionName}
-                  onChange={(e) => setNewMissionName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSaveNewMission();
-                    }
-                  }}
-                  className="w-full bg-neutral-950 border border-neutral-750 focus:border-amber-500 rounded-xl px-3.5 py-2 text-xs text-neutral-100 font-mono outline-none"
-                />
-                <p className="text-[10px] text-neutral-500 mt-1">
-                  Once added, this mission will appear in the dropdown for all time blocks.
-                </p>
-              </div>
+                {/* Input Field */}
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[10px] uppercase font-mono tracking-wider text-neutral-400 block">
+                    Create New Mission Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="e.g. ID2950, Client Project, AI App..."
+                      value={newMissionName}
+                      onChange={(e) => setNewMissionName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveNewMission();
+                        }
+                      }}
+                      className="w-full bg-neutral-950/80 border border-neutral-800 focus:border-amber-400/80 focus:ring-2 focus:ring-amber-500/10 rounded-xl px-3.5 py-2.5 text-xs text-neutral-100 font-mono placeholder:text-neutral-600 outline-none transition"
+                    />
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600 text-[10px] font-mono">
+                      ↵ Enter
+                    </div>
+                  </div>
+                </div>
 
-              {/* Current Missions Chips */}
-              <div>
-                <label className="text-[10px] font-mono text-neutral-500 block mb-1.5">
-                  Available Missions:
-                </label>
-                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
-                  {missions.map((m) => (
-                    <span
-                      key={m}
-                      className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 flex items-center gap-1.5"
-                    >
-                      <span>🎯 {m}</span>
-                      {m !== 'ID2950' && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMission(m)}
-                          className="text-neutral-500 hover:text-rose-400 text-xs leading-none ml-0.5"
-                          title={`Delete "${m}"`}
+                {/* Active Missions List */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-[10px] uppercase font-mono tracking-wider text-neutral-400">
+                    <span>Active Missions ({missions.length})</span>
+                    <span className="text-neutral-600 font-normal">Click ✕ to remove</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-neutral-950/50 border border-neutral-850/80 max-h-32 overflow-y-auto">
+                    {missions.map((m) => {
+                      const isDefault = m === 'ID2950';
+                      return (
+                        <div
+                          key={m}
+                          className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border flex items-center gap-1.5 transition ${
+                            isDefault
+                              ? 'bg-amber-950/40 border-amber-800/50 text-amber-300 font-semibold shadow-sm'
+                              : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                          }`}
                         >
-                          ✕
-                        </button>
-                      )}
-                    </span>
-                  ))}
+                          <span className="text-[10px] opacity-75">🎯</span>
+                          <span>{m}</span>
+                          {!isDefault && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMission(m)}
+                              className="text-neutral-500 hover:text-rose-400 p-0.5 text-[10px] leading-none transition"
+                              title={`Delete "${m}"`}
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsCreateMissionOpen(false);
-                    setNewMissionName('');
-                    setTargetMissionEntry(null);
-                  }}
-                  className="px-3.5 py-2 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveNewMission()}
-                  disabled={!newMissionName.trim()}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none text-neutral-950 font-bold text-xs transition shadow-md cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Save Mission</span>
-                </button>
+                {/* Modal Footer / Actions */}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-850/80">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreateMissionOpen(false);
+                      setNewMissionName('');
+                      setTargetMissionEntry(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-neutral-800/60 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveNewMission()}
+                    disabled={!newMissionName.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-40 disabled:pointer-events-none text-neutral-950 font-bold text-xs transition shadow-[0_4px_14px_rgba(245,158,11,0.25)] cursor-pointer active:scale-[0.98]"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Save Mission</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
