@@ -5,6 +5,7 @@ import {
   calculateDayTotalDuration,
   calculateMissionDurations,
   calculateDayDetailedStats,
+  calculateTotalAppUsageDuration,
 } from '@/lib/timeUtils';
 
 export interface PDFExportOptions {
@@ -184,41 +185,15 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
   doc.line(margin, y, margin + contentWidth, y);
   y += 6;
 
-  // 3. EXECUTIVE PRODUCTIVITY & MISSION DASHBOARD CARD
-  const missionGroups: { mission: string; duration: string; entries: TimeEntry[] }[] = [];
-  stats.missions.forEach((m) => {
-    const entries = day.entries.filter((e) => e.mission?.trim() === m.mission);
-    missionGroups.push({ mission: m.mission, duration: m.duration, entries });
-  });
-  const untaggedEntries = day.entries.filter((e) => !e.mission?.trim());
-  if (untaggedEntries.length > 0) {
-    missionGroups.push({
-      mission: 'General / Untagged',
-      duration: stats.untaggedDuration || 'Untracked',
-      entries: untaggedEntries,
-    });
-  }
+  // 3. EXECUTIVE PRODUCTIVITY & MISSION DASHBOARD CARD (Compact International Standard)
+  const distractionTime = calculateTotalAppUsageDuration(day.appUsage);
+  const hasMissions = stats.missions.length > 0 || stats.untaggedMinutes > 0;
 
-  // Pre-calculate exact height of Executive Summary
-  let summaryHeight = 16; // header & KPI row
-  if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
-    summaryHeight += 5 + stats.missions.length * 5 + (stats.untaggedMinutes > 0 ? 5 : 0) + 2;
+  // Pre-calculate exact compact height of Executive Summary
+  let summaryHeight = 17; // Title & KPI row + base padding
+  if (hasMissions) {
+    summaryHeight += 5 + stats.missions.length * 5 + (stats.untaggedMinutes > 0 ? 5 : 0) + 1;
   }
-  summaryHeight += 6; // "What I did today" header
-  missionGroups.forEach((g) => {
-    summaryHeight += 5; // group title
-    g.entries.forEach((e) => {
-      const dur = calculateDuration(e.startTime, e.endTime);
-      const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      const bullet = `• ${e.startTime || '--:--'} – ${e.endTime || '--:--'}${dur ? ' (' + dur + ')' : ''}   —   ${wText}`;
-      const splitLines = doc.splitTextToSize(bullet, contentWidth - 14);
-      summaryHeight += splitLines.length * 4.2;
-    });
-    summaryHeight += 2;
-  });
-  summaryHeight += 6; // padding
 
   checkPageBreak(summaryHeight + 6);
 
@@ -238,59 +213,76 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
   doc.setTextColor(30, 41, 59);
   doc.text('EXECUTIVE PRODUCTIVITY & MISSIONS OVERVIEW', margin + 7, y + 6);
 
-  // Key KPI Badges row
-  let kpiY = y + 12;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
+  // Key KPI Badges row (Total Time, Distraction Time, Sessions, Dhikr, Apps)
+  const kpiY = y + 12;
+  let curKpiX = margin + 7;
 
-  // Total Time Badge
-  const totalText = `Total Time: ${stats.totalDuration || '0m'}`;
-  const totalW = doc.getTextWidth(totalText) + 8;
-  doc.setFillColor(254, 243, 199);
-  doc.setDrawColor(217, 119, 6);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(margin + 7, kpiY - 4, totalW, 5.8, 1.2, 1.2, 'FD');
-  doc.setTextColor(180, 83, 9);
-  doc.text(totalText, margin + 11, kpiY);
+  // Helper for KPI pill badges
+  const renderKpiBadge = (
+    text: string,
+    bgColor: [number, number, number],
+    borderColor: [number, number, number],
+    textColor: [number, number, number]
+  ) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    const badgeW = doc.getTextWidth(text) + 8;
+    doc.setFillColor(...bgColor);
+    doc.setDrawColor(...borderColor);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(curKpiX, kpiY - 4, badgeW, 5.8, 1.2, 1.2, 'FD');
+    doc.setTextColor(...textColor);
+    doc.text(text, curKpiX + 4, kpiY);
+    curKpiX += badgeW + 3;
+  };
 
-  // Sessions Badge
-  const sessText = `${day.entries.length} Sessions`;
-  const sessW = doc.getTextWidth(sessText) + 8;
-  const sessX = margin + 7 + totalW + 3;
-  doc.setFillColor(241, 245, 249);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(sessX, kpiY - 4, sessW, 5.8, 1.2, 1.2, 'FD');
-  doc.setTextColor(51, 65, 85);
-  doc.text(sessText, sessX + 4, kpiY);
+  // 1. Total Time Badge
+  renderKpiBadge(
+    `Total Time: ${stats.totalDuration || '0m'}`,
+    [254, 243, 199],
+    [217, 119, 6],
+    [180, 83, 9]
+  );
 
-  // Dhikr Badge (if present)
+  // 2. Distraction Time Badge (Mobile Screen Time)
+  renderKpiBadge(
+    `Distraction: ${distractionTime || '0m'}`,
+    [254, 242, 242],
+    [239, 68, 68],
+    [185, 28, 28]
+  );
+
+  // 3. Sessions Badge
+  renderKpiBadge(
+    `${day.entries.length} Sessions`,
+    [241, 245, 249],
+    [203, 213, 225],
+    [51, 65, 85]
+  );
+
+  // 4. Dhikr Badge (if recorded)
   if (validDhikr.length > 0) {
-    const dhikrBadge = `${validDhikr.length} Dhikr Recorded`;
-    const dhikrW = doc.getTextWidth(dhikrBadge) + 8;
-    const dhikrX = sessX + sessW + 3;
-    doc.setFillColor(254, 252, 232);
-    doc.setDrawColor(202, 138, 4);
-    doc.roundedRect(dhikrX, kpiY - 4, dhikrW, 5.8, 1.2, 1.2, 'FD');
-    doc.setTextColor(161, 98, 7);
-    doc.text(dhikrBadge, dhikrX + 4, kpiY);
+    renderKpiBadge(
+      `${validDhikr.length} Dhikr`,
+      [254, 252, 232],
+      [202, 138, 4],
+      [161, 98, 7]
+    );
   }
 
-  // Mobile Apps Badge (if present)
+  // 5. Apps Badge (if tracked)
   if (validApps.length > 0) {
-    const appBadge = `${validApps.length} Apps Tracked`;
-    const appW = doc.getTextWidth(appBadge) + 8;
-    const appX = contentWidth + margin - appW - 3;
-    doc.setFillColor(238, 242, 255);
-    doc.setDrawColor(165, 180, 252);
-    doc.roundedRect(appX, kpiY - 4, appW, 5.8, 1.2, 1.2, 'FD');
-    doc.setTextColor(67, 56, 202);
-    doc.text(appBadge, appX + 4, kpiY);
+    renderKpiBadge(
+      `${validApps.length} Apps`,
+      [238, 242, 255],
+      [165, 180, 252],
+      [67, 56, 202]
+    );
   }
 
+  // Missions Breakdown (Compact, International Standard Pill Badges, NO brackets)
   let curY = kpiY + 7;
-
-  // Missions Breakdown List (International Standard Pill Badges, NO brackets)
-  if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
+  if (hasMissions) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
@@ -305,7 +297,7 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
       doc.setFillColor(254, 243, 199);
       doc.setDrawColor(217, 119, 6);
       doc.setLineWidth(0.2);
-      doc.roundedRect(margin + 7, curY - 3.4, mBadgeW, 4.8, 1, 1, 'FD');
+      doc.roundedRect(margin + 7, curY - 3.4, mBadgeW, 4.6, 1, 1, 'FD');
       doc.setTextColor(180, 83, 9);
       doc.text(m.mission, margin + 10, curY);
 
@@ -319,7 +311,7 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
       doc.text(
-        `•   ${m.sessionCount} sessions (${m.percentage}% of day)`,
+        `•   ${m.sessionCount} ${m.sessionCount === 1 ? 'session' : 'sessions'} (${m.percentage}% of day)`,
         margin + 7 + mBadgeW + 4 + durW + 3,
         curY
       );
@@ -336,7 +328,7 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
       doc.setFillColor(241, 245, 249);
       doc.setDrawColor(203, 213, 225);
       doc.setLineWidth(0.2);
-      doc.roundedRect(margin + 7, curY - 3.4, genW, 4.8, 1, 1, 'FD');
+      doc.roundedRect(margin + 7, curY - 3.4, genW, 4.6, 1, 1, 'FD');
       doc.setTextColor(71, 85, 105);
       doc.text(genLabel, margin + 10, curY);
 
@@ -349,43 +341,14 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
       doc.text(
-        `•   ${stats.untaggedCount} session`,
+        `•   ${stats.untaggedCount} ${stats.untaggedCount === 1 ? 'session' : 'sessions'}`,
         margin + 7 + genW + 4 + durW + 3,
         curY
       );
 
       curY += 5;
     }
-    curY += 2;
   }
-
-  // Work Overview / "What I Did Today" (Clean bullets, NO brackets)
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-  doc.text('WHAT I DID TODAY (WORK OVERVIEW):', margin + 7, curY);
-  curY += 4.5;
-
-  missionGroups.forEach((g) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(180, 83, 9);
-    doc.text(`Mission: ${g.mission} (${g.duration}):`, margin + 7, curY);
-    curY += 4.2;
-
-    g.entries.forEach((e) => {
-      const dur = calculateDuration(e.startTime, e.endTime);
-      const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor(51, 65, 85);
-      const bullet = `• ${e.startTime || '--:--'} – ${e.endTime || '--:--'}${dur ? ' (' + dur + ')' : ''}   —   ${wText}`;
-      const splitBullet = doc.splitTextToSize(bullet, contentWidth - 14);
-      doc.text(splitBullet, margin + 10, curY);
-      curY += splitBullet.length * 4;
-    });
-    curY += 2;
-  });
 
   y += summaryHeight + 6;
 
@@ -555,8 +518,11 @@ export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includ
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.setTextColor(30, 35, 45);
-    doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+    doc.text(
+      `MOBILE DIGITAL WELLBEING — DISTRACTION & SCREEN TIME (Total: ${distractionTime || '0m'}):`,
+      margin + 4,
+      y + 6
+    );
 
     let appY = y + 11;
     doc.setFont('helvetica', 'normal');
@@ -764,6 +730,8 @@ export function downloadMultiDayPDF(
 
   const allEntries = selectedDays.flatMap((d) => d.entries);
   const multiStats = calculateDayDetailedStats(allEntries);
+  const allApps = selectedDays.flatMap((d) => d.appUsage || []);
+  const multiDistraction = calculateTotalAppUsageDuration(allApps);
 
   // 1. Header Banner on first page
   doc.setFont('helvetica', 'bold');
@@ -824,6 +792,7 @@ export function downloadMultiDayPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
 
+  // Total Time Badge
   const mTotalText = `Total Time: ${multiStats.totalDuration || '0m'}`;
   const mTotalW = doc.getTextWidth(mTotalText) + 8;
   doc.setFillColor(254, 243, 199);
@@ -833,9 +802,20 @@ export function downloadMultiDayPDF(
   doc.setTextColor(180, 83, 9);
   doc.text(mTotalText, margin + 11, mkpiY);
 
-  const mSessText = `${allEntries.length} Total Sessions across ${selectedDays.length} Days`;
+  // Distraction Time Badge
+  const mDistText = `Distraction: ${multiDistraction || '0m'}`;
+  const mDistW = doc.getTextWidth(mDistText) + 8;
+  const mDistX = margin + 7 + mTotalW + 3;
+  doc.setFillColor(254, 242, 242);
+  doc.setDrawColor(239, 68, 68);
+  doc.roundedRect(mDistX, mkpiY - 4, mDistW, 5.8, 1.2, 1.2, 'FD');
+  doc.setTextColor(185, 28, 28);
+  doc.text(mDistText, mDistX + 4, mkpiY);
+
+  // Sessions Badge
+  const mSessText = `${allEntries.length} Sessions (${selectedDays.length} Days)`;
   const mSessW = doc.getTextWidth(mSessText) + 8;
-  const mSessX = margin + 7 + mTotalW + 3;
+  const mSessX = mDistX + mDistW + 3;
   doc.setFillColor(241, 245, 249);
   doc.setDrawColor(203, 213, 225);
   doc.roundedRect(mSessX, mkpiY - 4, mSessW, 5.8, 1.2, 1.2, 'FD');
@@ -898,12 +878,13 @@ export function downloadMultiDayPDF(
     doc.setTextColor(20, 25, 35);
     doc.text(day.name || `Day ${dayIndex + 1}`, margin + 4, y + 5);
 
+    const dayDistraction = calculateTotalAppUsageDuration(day.appUsage);
     let mBadgeStr = dayStats.missions.map((m) => `${m.mission}: ${m.duration}`).join('   •   ');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 105, 115);
     doc.text(
-      `Total: ${dayStats.totalDuration || '0m'} (${day.entries.length} Sessions)${mBadgeStr ? '   |   ' + mBadgeStr : ''}`,
+      `Total: ${dayStats.totalDuration || '0m'} (${day.entries.length} Sessions)${dayDistraction ? '   |   Distraction: ' + dayDistraction : ''}${mBadgeStr ? '   |   ' + mBadgeStr : ''}`,
       margin + 4,
       y + 9.5
     );
@@ -1028,7 +1009,11 @@ export function downloadMultiDayPDF(
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(30, 35, 45);
-        doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+        doc.text(
+          `MOBILE DIGITAL WELLBEING — DISTRACTION & SCREEN TIME (Total: ${dayDistraction || '0m'}):`,
+          margin + 4,
+          y + 6
+        );
 
         let appY = y + 11;
         doc.setFont('helvetica', 'normal');

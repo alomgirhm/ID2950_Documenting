@@ -24,7 +24,12 @@ import {
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
-import { calculateDuration, calculateDayTotalDuration, calculateMissionDurations } from '@/lib/timeUtils';
+import {
+  calculateDuration,
+  calculateDayTotalDuration,
+  calculateMissionDurations,
+  calculateTotalAppUsageDuration,
+} from '@/lib/timeUtils';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
@@ -1593,6 +1598,7 @@ export default function ID2950Page() {
             const isDayCollapsed = !!collapsedDays[day.id];
             const dayTotal = calculateDayTotalDuration(day.entries);
             const missionDurations = calculateMissionDurations(day.entries);
+            const distractionTime = calculateTotalAppUsageDuration(day.appUsage);
 
             return (
               <section
@@ -1665,6 +1671,16 @@ export default function ID2950Page() {
                           title="Total productive hours logged for this day across all missions"
                         >
                           Total: {dayTotal}
+                        </span>
+                      )}
+                      {distractionTime && (
+                        <span
+                          className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-rose-950/30 text-rose-300 border border-rose-900/40 flex items-center gap-1.5 transition shadow-xs"
+                          title="Total mobile distraction screen time logged for this day"
+                        >
+                          <Smartphone className="w-3 h-3 text-rose-400" />
+                          <span className="text-neutral-400 font-medium">Distraction:</span>
+                          <span className="font-semibold text-rose-200">{distractionTime}</span>
                         </span>
                       )}
                       {missionDurations.map((md) => (
@@ -2342,7 +2358,7 @@ export default function ID2950Page() {
                     <span>Mobile Screen Time</span>
                     {day.appUsage && day.appUsage.length > 0 && (
                       <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
-                        {day.appUsage.length} apps
+                        {calculateTotalAppUsageDuration(day.appUsage) || `${day.appUsage.length} apps`}
                       </span>
                     )}
                   </button>
@@ -2357,11 +2373,16 @@ export default function ID2950Page() {
               {expandedWellbeing[day.id] && (
                 <div className="mt-4 pt-4 border-t border-neutral-850/80 bg-neutral-950/60 rounded-xl p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-neutral-850">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <Smartphone className="w-4 h-4 text-indigo-400" />
                       <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                         Mobile App Screen Time (Samsung Wellbeing)
                       </span>
+                      {calculateTotalAppUsageDuration(day.appUsage) && (
+                        <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-950/40 text-rose-300 border border-rose-800/40 font-semibold">
+                          Total Distraction: {calculateTotalAppUsageDuration(day.appUsage)}
+                        </span>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap">

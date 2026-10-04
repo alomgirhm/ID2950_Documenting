@@ -1,4 +1,4 @@
-import { TimeEntry } from '@/types';
+import { TimeEntry, AppUsageItem } from '@/types';
 
 /**
  * Calculates raw duration in minutes between start and end time.
@@ -179,4 +179,71 @@ export function calculateDayDetailedStats(entries: TimeEntry[]): DayDetailedStat
     untaggedCount,
   };
 }
+
+/**
+ * Parses user input duration strings for app usage / screen time into total minutes.
+ * Handles diverse input formats including:
+ * - "2 h 20 min", "2 h 25 minutes", "2h 20m", "2h", "2 hours", "1 hour"
+ * - "35m", "35 min", "35 minutes"
+ * - "1:45" (HH:MM)
+ * - "45" (plain minutes)
+ */
+export function parseAppDurationToMinutes(durationStr?: string): number {
+  if (!durationStr) return 0;
+  const str = durationStr.trim().toLowerCase();
+  if (!str) return 0;
+
+  // Handle "HH:MM" format e.g. "1:45"
+  if (/^\d+:\d+$/.test(str)) {
+    const parts = str.split(':');
+    const h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10);
+    return (isNaN(h) ? 0 : h * 60) + (isNaN(m) ? 0 : m);
+  }
+
+  let hours = 0;
+  let minutes = 0;
+  let matched = false;
+
+  // Match hours: e.g. "2 h", "2hours", "2hr", "2hrs", "2 hour", "2 hours"
+  const hourMatch = str.match(/(\d+)\s*(?:h|hour|hours|hr|hrs)\b/);
+  if (hourMatch) {
+    hours = parseInt(hourMatch[1], 10) || 0;
+    matched = true;
+  }
+
+  // Match minutes: e.g. "25 min", "25m", "25 mins", "25 minute", "25 minutes"
+  const minMatch = str.match(/(\d+)\s*(?:m|min|mins|minute|minutes)\b/);
+  if (minMatch) {
+    minutes = parseInt(minMatch[1], 10) || 0;
+    matched = true;
+  }
+
+  // If neither pattern matched, check if it's purely a number e.g. "45"
+  if (!matched) {
+    const rawNum = parseInt(str, 10);
+    if (!isNaN(rawNum) && rawNum > 0) {
+      return rawNum;
+    }
+  }
+
+  return hours * 60 + minutes;
+}
+
+/**
+ * Calculates the total app usage / mobile distraction screen time in minutes.
+ */
+export function calculateTotalAppUsageMinutes(appUsage?: AppUsageItem[]): number {
+  if (!appUsage || appUsage.length === 0) return 0;
+  return appUsage.reduce((acc, item) => acc + parseAppDurationToMinutes(item.duration), 0);
+}
+
+/**
+ * Calculates the formatted total app usage / mobile distraction screen time (e.g. "2h 25m", "45m").
+ */
+export function calculateTotalAppUsageDuration(appUsage?: AppUsageItem[]): string {
+  const totalMins = calculateTotalAppUsageMinutes(appUsage);
+  return formatMinutes(totalMins);
+}
+
 
