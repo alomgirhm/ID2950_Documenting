@@ -7,6 +7,10 @@ import {
   calculateDayDetailedStats,
 } from '@/lib/timeUtils';
 
+export interface PDFExportOptions {
+  includeNotes?: boolean;
+}
+
 function getFormattedWorkLines(entry: TimeEntry): string {
   if (entry.works && entry.works.length > 0) {
     const valid = entry.works.filter((w) => w.trim().length > 0);
@@ -99,14 +103,14 @@ function createQuranVerseImage(): string | null {
 
 /**
  * Downloads a clean, beautifully formatted executive PDF report for an entire day:
- * - Executive Productivity Overview with Total Time & Mission Times
- * - "What I Did Today" Work Summary grouped by Mission
- * - Daily Dhikr & Spiritual Remembrance with counts & durations
- * - Quranic verse card
- * - Detailed session cards with full learnings & notes
- * - Mobile Digital Wellbeing app screen time
+ * Supports two modes:
+ * - With Notes (Full Detailed Report): Executive summary + all study notes & learnings.
+ * - Without Notes (Executive Summary Report): Concise overview + timeline without raw notes.
+ * Formatted with international typography standards (no square brackets).
  */
-export function downloadDayPDF(day: DayLog) {
+export function downloadDayPDF(day: DayLog, options: PDFExportOptions = { includeNotes: true }) {
+  const includeNotes = options.includeNotes !== false;
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -154,7 +158,10 @@ export function downloadDayPDF(day: DayLog) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(110, 110, 120);
-  doc.text('DAILY PRODUCTIVITY & LEARNINGS REPORT', margin + 68, y - 1);
+  const reportTypeSubtitle = includeNotes
+    ? 'DAILY PRODUCTIVITY & LEARNINGS REPORT (FULL RECORD)'
+    : 'DAILY PRODUCTIVITY & MISSIONS REPORT (EXECUTIVE SUMMARY)';
+  doc.text(reportTypeSubtitle, margin + 68, y - 1);
 
   y += 8;
 
@@ -195,21 +202,19 @@ export function downloadDayPDF(day: DayLog) {
   // Pre-calculate exact height of Executive Summary
   let summaryHeight = 16; // header & KPI row
   if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
-    summaryHeight += 5 + stats.missions.length * 4.5 + (stats.untaggedMinutes > 0 ? 4.5 : 0) + 2;
+    summaryHeight += 5 + stats.missions.length * 5 + (stats.untaggedMinutes > 0 ? 5 : 0) + 2;
   }
-  summaryHeight += 5.5; // "What I did today" header
+  summaryHeight += 6; // "What I did today" header
   missionGroups.forEach((g) => {
-    summaryHeight += 4.5; // group title
+    summaryHeight += 5; // group title
     g.entries.forEach((e) => {
       const dur = calculateDuration(e.startTime, e.endTime);
       const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      const splitLines = doc.splitTextToSize(
-        `- [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' | ' + dur : ''}] ${wText}`,
-        contentWidth - 14
-      );
-      summaryHeight += splitLines.length * 4;
+      const bullet = `• ${e.startTime || '--:--'} – ${e.endTime || '--:--'}${dur ? ' (' + dur + ')' : ''}   —   ${wText}`;
+      const splitLines = doc.splitTextToSize(bullet, contentWidth - 14);
+      summaryHeight += splitLines.length * 4.2;
     });
     summaryHeight += 2;
   });
@@ -284,7 +289,7 @@ export function downloadDayPDF(day: DayLog) {
 
   let curY = kpiY + 7;
 
-  // Missions Breakdown List (Table layout with exact margins)
+  // Missions Breakdown List (International Standard Pill Badges, NO brackets)
   if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
@@ -293,32 +298,68 @@ export function downloadDayPDF(day: DayLog) {
     curY += 4.5;
 
     stats.missions.forEach((m) => {
+      // Pill badge for mission name
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const mBadgeW = doc.getTextWidth(m.mission) + 6;
+      doc.setFillColor(254, 243, 199);
+      doc.setDrawColor(217, 119, 6);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(margin + 7, curY - 3.4, mBadgeW, 4.8, 1, 1, 'FD');
+      doc.setTextColor(180, 83, 9);
+      doc.text(m.mission, margin + 10, curY);
+
+      // Duration & Sessions
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.setTextColor(180, 83, 9);
-      doc.text(`[ ${m.mission} ]`, margin + 7, curY);
+      doc.setTextColor(30, 41, 59);
+      doc.text(m.duration, margin + 7 + mBadgeW + 4, curY);
 
+      const durW = doc.getTextWidth(m.duration);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(51, 65, 85);
-      doc.text(`${m.duration}   (${m.sessionCount} sessions | ${m.percentage}%)`, margin + 50, curY);
-      curY += 4.5;
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `•   ${m.sessionCount} sessions (${m.percentage}% of day)`,
+        margin + 7 + mBadgeW + 4 + durW + 3,
+        curY
+      );
+
+      curY += 5;
     });
 
     if (stats.untaggedMinutes > 0) {
+      // General pill badge
+      const genLabel = 'General / Untagged';
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      const genW = doc.getTextWidth(genLabel) + 6;
+      doc.setFillColor(241, 245, 249);
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(margin + 7, curY - 3.4, genW, 4.8, 1, 1, 'FD');
+      doc.setTextColor(71, 85, 105);
+      doc.text(genLabel, margin + 10, curY);
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.setTextColor(100, 116, 139);
-      doc.text('[ General / Untagged ]', margin + 7, curY);
+      doc.setTextColor(30, 41, 59);
+      doc.text(stats.untaggedDuration, margin + 7 + genW + 4, curY);
 
+      const durW = doc.getTextWidth(stats.untaggedDuration);
       doc.setFont('helvetica', 'normal');
-      doc.setTextColor(51, 65, 85);
-      doc.text(`${stats.untaggedDuration}   (${stats.untaggedCount} sessions)`, margin + 50, curY);
-      curY += 4.5;
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `•   ${stats.untaggedCount} session`,
+        margin + 7 + genW + 4 + durW + 3,
+        curY
+      );
+
+      curY += 5;
     }
     curY += 2;
   }
 
-  // Work Overview / "What I Did Today"
+  // Work Overview / "What I Did Today" (Clean bullets, NO brackets)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
@@ -338,7 +379,7 @@ export function downloadDayPDF(day: DayLog) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(51, 65, 85);
-      const bullet = `- [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' | ' + dur : ''}] ${wText}`;
+      const bullet = `• ${e.startTime || '--:--'} – ${e.endTime || '--:--'}${dur ? ' (' + dur + ')' : ''}   —   ${wText}`;
       const splitBullet = doc.splitTextToSize(bullet, contentWidth - 14);
       doc.text(splitBullet, margin + 10, curY);
       curY += splitBullet.length * 4;
@@ -373,8 +414,8 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(50, 55, 65);
     validDhikr.forEach((d) => {
       doc.setFont('helvetica', 'bold');
-      doc.text(`- ${d.name}:`, margin + 6, dY);
-      const nameWidth = doc.getTextWidth(`- ${d.name}: `);
+      doc.text(`• ${d.name}:`, margin + 6, dY);
+      const nameWidth = doc.getTextWidth(`• ${d.name}: `);
       doc.setFont('helvetica', 'normal');
       doc.text(`${d.count}`, margin + 6 + nameWidth, dY);
       dY += 5;
@@ -392,12 +433,16 @@ export function downloadDayPDF(day: DayLog) {
     y += verseHeight + 6;
   }
 
-  // Section Header: DETAILED SESSION LOGS & LEARNING NOTES
+  // Section Header: SESSIONS LOG
   checkPageBreak(14);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
   doc.setTextColor(30, 35, 45);
-  doc.text('DETAILED SESSION LOGS & LEARNING NOTES', margin, y + 2);
+  doc.text(
+    includeNotes ? 'DETAILED SESSION LOGS & LEARNING NOTES' : 'LOGGED SESSIONS TIMELINE',
+    margin,
+    y + 2
+  );
   doc.setDrawColor(215, 220, 228);
   doc.setLineWidth(0.3);
   doc.line(margin, y + 5, margin + contentWidth, y + 5);
@@ -406,11 +451,12 @@ export function downloadDayPDF(day: DayLog) {
   // 6. Loop over all time blocks / sessions
   day.entries.forEach((entry, index) => {
     const duration = calculateDuration(entry.startTime, entry.endTime);
+    // International standard format: 9:19 – 10:07 • 48m (NO square brackets)
     const timeText = duration
-      ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} | ${duration} ]`
-      : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
+      ? `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}  •  ${duration}`
+      : `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}`;
     const workText = getFormattedWorkLines(entry);
-    const notesText = entry.notes?.trim() || '';
+    const notesText = includeNotes ? entry.notes?.trim() || '' : '';
 
     // Measure Work Text
     doc.setFont('helvetica', 'bold');
@@ -418,10 +464,10 @@ export function downloadDayPDF(day: DayLog) {
     const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
     const workHeight = splitWork.length * 4.8;
 
-    // Measure Notes Text
+    // Measure Notes Text (only when includeNotes is true)
     let notesHeight = 0;
     let splitNotes: string[] = [];
-    if (notesText) {
+    if (includeNotes && notesText) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       splitNotes = doc.splitTextToSize(notesText, contentWidth - 12);
@@ -437,16 +483,16 @@ export function downloadDayPDF(day: DayLog) {
     doc.setLineWidth(0.3);
     doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-    // Top Header inside Card: Time badge with duration
+    // Top Header inside Card: Time badge with duration (NO square brackets)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
-    const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 5);
+    const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 6);
     doc.setFillColor(30, 35, 45);
     doc.roundedRect(margin + 4, y + 3.5, badgeWidth, 6.5, 1.5, 1.5, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.text(timeText, margin + 6.5, y + 7.8);
+    doc.text(timeText, margin + 7, y + 7.8);
 
-    // Mission badge if present (clean ASCII, NO emojis)
+    // Mission badge if present (NO square brackets)
     if (entry.mission) {
       const missionText = `Mission: ${entry.mission}`;
       doc.setFont('helvetica', 'bold');
@@ -476,8 +522,8 @@ export function downloadDayPDF(day: DayLog) {
 
     let currentBlockY = workStartY + workHeight + 1.5;
 
-    // Notes / Learnings section inside the card
-    if (notesText) {
+    // Notes / Learnings section inside the card (only if includeNotes is true)
+    if (includeNotes && notesText) {
       doc.setDrawColor(230, 233, 238);
       doc.setLineWidth(0.2);
       doc.line(margin + 5, currentBlockY, margin + contentWidth - 5, currentBlockY);
@@ -510,7 +556,7 @@ export function downloadDayPDF(day: DayLog) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(30, 35, 45);
-    doc.text('MOBILE DIGITAL WELLBEING - APP SCREEN TIME:', margin + 4, y + 6);
+    doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
 
     let appY = y + 11;
     doc.setFont('helvetica', 'normal');
@@ -518,7 +564,7 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(60, 65, 75);
 
     validApps.forEach((app) => {
-      doc.text(`- ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+      doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
       appY += 5;
     });
 
@@ -542,7 +588,8 @@ export function downloadDayPDF(day: DayLog) {
 
   // File download name sanitization
   const safeName = (day.name || 'Day').replace(/[^a-zA-Z0-9_-]/g, '_');
-  doc.save(`ID2950_Documenting_${safeName}_Report.pdf`);
+  const typeTag = includeNotes ? 'Full_Report' : 'Summary_Report';
+  doc.save(`ID2950_Documenting_${safeName}_${typeTag}.pdf`);
 }
 
 /**
@@ -624,8 +671,8 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   const duration = calculateDuration(entry.startTime, entry.endTime);
   const missionDisplay = entry.mission ? `   |   Mission: ${entry.mission}` : '';
   const timeDisplay = duration
-    ? `${entry.startTime || '--:--'} - ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
-    : `${entry.startTime || '--:--'} - ${entry.endTime || '--:--'}${missionDisplay}`;
+    ? `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
+    : `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}${missionDisplay}`;
   doc.text(timeDisplay, margin + 4, y + 12.5);
 
   y += 24;
@@ -675,9 +722,15 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
 /**
  * Downloads a combined, beautifully formatted PDF report for multiple days
  * (e.g. Day 1 - 10, Day 3 - 8, or all selected days).
+ * Supports options for including or omitting notes.
  */
-export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string) {
+export function downloadMultiDayPDF(
+  selectedDays: DayLog[],
+  rangeLabel?: string,
+  options: PDFExportOptions = { includeNotes: true }
+) {
   if (!selectedDays || selectedDays.length === 0) return;
+  const includeNotes = options.includeNotes !== false;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -721,7 +774,10 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(110, 110, 120);
-  doc.text('MULTI-DAY PRODUCTIVITY & LEARNINGS REPORT', margin + 68, y - 1);
+  const multiSub = includeNotes
+    ? 'MULTI-DAY PRODUCTIVITY & LEARNINGS REPORT (FULL RECORD)'
+    : 'MULTI-DAY PRODUCTIVITY & MISSIONS REPORT (EXECUTIVE SUMMARY)';
+  doc.text(multiSub, margin + 68, y - 1);
 
   y += 8;
 
@@ -787,9 +843,9 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   doc.text(mSessText, mSessX + 4, mkpiY);
 
   if (multiStats.missions.length > 0) {
-    let mLine = 'Missions Breakdown: ';
+    let mLine = 'Missions: ';
     multiStats.missions.forEach((m, idx) => {
-      mLine += `[${m.mission}] ${m.duration} (${m.sessionCount} sessions | ${m.percentage}%)`;
+      mLine += `${m.mission}: ${m.duration} (${m.sessionCount} sessions • ${m.percentage}%)`;
       if (idx < multiStats.missions.length - 1) mLine += '   |   ';
     });
     doc.setFont('helvetica', 'normal');
@@ -842,7 +898,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
     doc.setTextColor(20, 25, 35);
     doc.text(day.name || `Day ${dayIndex + 1}`, margin + 4, y + 5);
 
-    let mBadgeStr = dayStats.missions.map((m) => `[${m.mission}: ${m.duration}]`).join('  ');
+    let mBadgeStr = dayStats.missions.map((m) => `${m.mission}: ${m.duration}`).join('   •   ');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 105, 115);
@@ -866,10 +922,10 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       day.entries.forEach((entry, index) => {
         const duration = calculateDuration(entry.startTime, entry.endTime);
         const timeText = duration
-          ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} | ${duration} ]`
-          : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
+          ? `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}  •  ${duration}`
+          : `${entry.startTime || '--:--'} – ${entry.endTime || '--:--'}`;
         const workText = getFormattedWorkLines(entry);
-        const notesText = entry.notes?.trim() || '';
+        const notesText = includeNotes ? entry.notes?.trim() || '' : '';
 
         // Measure Work Text
         doc.setFont('helvetica', 'bold');
@@ -877,10 +933,10 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
         const workHeight = splitWork.length * 4.8;
 
-        // Measure Notes Text
+        // Measure Notes Text (only if includeNotes is true)
         let notesHeight = 0;
         let splitNotes: string[] = [];
-        if (notesText) {
+        if (includeNotes && notesText) {
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8.5);
           splitNotes = doc.splitTextToSize(notesText, contentWidth - 12);
@@ -899,13 +955,13 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         // Time badge inside card top with duration
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
-        const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 5);
+        const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 6);
         doc.setFillColor(30, 35, 45);
         doc.roundedRect(margin + 4, y + 3.5, badgeWidth, 6.5, 1.5, 1.5, 'F');
         doc.setTextColor(255, 255, 255);
-        doc.text(timeText, margin + 6.5, y + 7.8);
+        doc.text(timeText, margin + 7, y + 7.8);
 
-        // Mission badge if present (NO emojis)
+        // Mission badge if present
         if (entry.mission) {
           const missionText = `Mission: ${entry.mission}`;
           doc.setFont('helvetica', 'bold');
@@ -936,7 +992,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         let currentBlockY = workStartY + workHeight + 1.5;
 
         // Notes / Learnings section inside the card
-        if (notesText) {
+        if (includeNotes && notesText) {
           doc.setDrawColor(230, 233, 238);
           doc.setLineWidth(0.2);
           doc.line(margin + 5, currentBlockY, margin + contentWidth - 5, currentBlockY);
@@ -972,7 +1028,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(30, 35, 45);
-        doc.text('MOBILE DIGITAL WELLBEING - APP SCREEN TIME:', margin + 4, y + 6);
+        doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
 
         let appY = y + 11;
         doc.setFont('helvetica', 'normal');
@@ -980,7 +1036,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setTextColor(60, 65, 75);
 
         validApps.forEach((app) => {
-          doc.text(`- ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+          doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
           appY += 5;
         });
 
@@ -1000,7 +1056,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
       doc.setTextColor(160, 90, 10);
-      doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
+      doc.text('DAILY DHIKR & SPIRITUAL REMEMBRANCE:', margin + 4, y + 6);
 
       let dhikrY = y + 11;
       doc.setFont('helvetica', 'normal');
@@ -1008,7 +1064,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       doc.setTextColor(60, 65, 75);
 
       validDhikr.forEach((item) => {
-        doc.text(`- ${item.name}: ${item.count}`, margin + 5, dhikrY);
+        doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
         dhikrY += 5;
       });
 
@@ -1032,5 +1088,6 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   }
 
   const safeTitle = (rangeLabel || 'MultiDay_Report').replace(/[^a-zA-Z0-9_-]/g, '_');
-  doc.save(`ID2950_Documenting_${safeTitle}.pdf`);
+  const typeTag = includeNotes ? 'Full_Report' : 'Summary_Report';
+  doc.save(`ID2950_Documenting_${safeTitle}_${typeTag}.pdf`);
 }

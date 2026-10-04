@@ -19,7 +19,8 @@ import {
   Smartphone, 
   ClipboardPaste, 
   Files,
-  Target 
+  Target,
+  BookOpen 
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
@@ -266,11 +267,15 @@ export default function ID2950Page() {
     } catch {}
   };
 
+  // Single-Day PDF Export Modal state
+  const [pdfExportModalDay, setPdfExportModalDay] = useState<DayLog | null>(null);
+
   // Multi-Day PDF Export states
   const [isMultiDayExportOpen, setIsMultiDayExportOpen] = useState<boolean>(false);
   const [rangeStart, setRangeStart] = useState<number>(1);
   const [rangeEnd, setRangeEnd] = useState<number>(10);
   const [customRangeTitle, setCustomRangeTitle] = useState<string>('');
+  const [multiDayIncludeNotes, setMultiDayIncludeNotes] = useState<boolean>(true);
 
   // Load from localStorage on mount & clean any legacy corrupted tokens
   useEffect(() => {
@@ -874,7 +879,7 @@ export default function ID2950Page() {
     const end = Math.max(start, Math.min(rangeEnd, filteredDays.length));
     const slice = filteredDays.slice(start - 1, end);
     const label = customRangeTitle.trim() || `Days ${start} - ${end} (${activeMonth})`;
-    downloadMultiDayPDF(slice, label);
+    downloadMultiDayPDF(slice, label, { includeNotes: multiDayIncludeNotes });
     setIsMultiDayExportOpen(false);
   };
 
@@ -1288,6 +1293,37 @@ export default function ID2950Page() {
                 />
               </div>
 
+              {/* Notes Option Toggle for Multi-Day */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-mono text-neutral-400 block">
+                  Report Format:
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMultiDayIncludeNotes(true)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition text-center cursor-pointer ${
+                      multiDayIncludeNotes
+                        ? 'bg-amber-950/50 border-amber-500/70 text-amber-300 shadow-sm'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    With Notes (Full Record)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMultiDayIncludeNotes(false)}
+                    className={`px-3 py-2 rounded-xl text-xs font-semibold border transition text-center cursor-pointer ${
+                      !multiDayIncludeNotes
+                        ? 'bg-amber-950/50 border-amber-500/70 text-amber-300 shadow-sm'
+                        : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    Without Notes (Summary)
+                  </button>
+                </div>
+              </div>
+
               {/* Preview box */}
               <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-850 text-xs font-mono text-neutral-400 flex items-center justify-between">
                 <span>Selected: {Math.max(0, Math.min(rangeEnd, filteredDays.length) - Math.min(rangeStart, filteredDays.length) + 1)} Days</span>
@@ -1311,6 +1347,103 @@ export default function ID2950Page() {
                   <Download className="w-3.5 h-3.5" />
                   <span>Download Multi-Day PDF</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Single-Day PDF Export Modal (With Notes vs Without Notes) */}
+        {pdfExportModalDay && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="relative bg-neutral-900 border border-neutral-800 rounded-2xl max-w-md w-full shadow-[0_25px_60px_rgba(0,0,0,0.85)] overflow-hidden">
+              {/* Gold Top Glow */}
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-amber-400/80 to-transparent" />
+
+              <div className="p-5 sm:p-6 space-y-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 shadow-inner">
+                      <Download className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold tracking-tight text-neutral-100">
+                        Download Day Report (PDF)
+                      </h3>
+                      <p className="text-[11px] font-mono text-neutral-400">
+                        {pdfExportModalDay.name} &bull; {pdfExportModalDay.month}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPdfExportModalDay(null)}
+                    className="text-neutral-400 hover:text-white p-1 text-sm rounded-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <p className="text-xs text-neutral-400 leading-relaxed">
+                  Select your preferred PDF export format for this day:
+                </p>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {/* Option 1: Full Report With Notes */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      downloadDayPDF(pdfExportModalDay, { includeNotes: true });
+                      setPdfExportModalDay(null);
+                    }}
+                    className="flex items-start gap-3 p-3.5 rounded-xl bg-neutral-950 hover:bg-neutral-850/80 border border-neutral-800 hover:border-amber-500/60 text-left transition group cursor-pointer"
+                  >
+                    <div className="p-2 rounded-lg bg-amber-950/50 text-amber-400 border border-amber-800/50 mt-0.5 shrink-0">
+                      <BookOpen className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white group-hover:text-amber-300 transition flex items-center gap-1.5">
+                        <span>With Notes (Full Detailed Report)</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-950/60 text-amber-300 border border-amber-800/40">Detailed</span>
+                      </div>
+                      <div className="text-[11px] text-neutral-400 mt-1 leading-snug">
+                        Includes Executive Summary, Work Overview, Dhikr, plus all detailed session study notes & learnings.
+                      </div>
+                    </div>
+                  </button>
+
+                  {/* Option 2: Summary Report Without Notes */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      downloadDayPDF(pdfExportModalDay, { includeNotes: false });
+                      setPdfExportModalDay(null);
+                    }}
+                    className="flex items-start gap-3 p-3.5 rounded-xl bg-neutral-950 hover:bg-neutral-850/80 border border-neutral-800 hover:border-amber-500/60 text-left transition group cursor-pointer"
+                  >
+                    <div className="p-2 rounded-lg bg-neutral-850 text-emerald-400 border border-neutral-750 mt-0.5 shrink-0">
+                      <FileText className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-white group-hover:text-amber-300 transition flex items-center gap-1.5">
+                        <span>Without Notes (Executive Summary)</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">Clean & Concise</span>
+                      </div>
+                      <div className="text-[11px] text-neutral-400 mt-1 leading-snug">
+                        Clean executive report with total productive hours, mission breakdown, works timeline, and Dhikr without study notes.
+                      </div>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPdfExportModalDay(null)}
+                    className="px-4 py-2 text-xs font-medium text-neutral-400 hover:text-white rounded-xl hover:bg-neutral-800 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1569,9 +1702,10 @@ export default function ID2950Page() {
 
                       {/* Download Day PDF */}
                       <button
-                        onClick={() => downloadDayPDF(day)}
-                        className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition"
-                        title="Download Full Day Report as PDF"
+                        type="button"
+                        onClick={() => setPdfExportModalDay(day)}
+                        className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition cursor-pointer"
+                        title="Export Day as PDF (Choose with or without notes)"
                       >
                         <Download className="w-3.5 h-3.5 text-neutral-400" />
                         <span className="text-[11px] hidden sm:inline">PDF</span>
