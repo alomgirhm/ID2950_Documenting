@@ -179,3 +179,4 @@ export function calculateDayDetailedStats(entries: TimeEntry[]): DayDetailedStat
     untaggedCount,
   };
 }
+

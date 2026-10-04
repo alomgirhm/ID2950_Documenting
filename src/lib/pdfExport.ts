@@ -98,7 +98,7 @@ function createQuranVerseImage(): string | null {
 }
 
 /**
- * Downloads a complete, beautiful executive PDF report for an entire day:
+ * Downloads a clean, beautifully formatted executive PDF report for an entire day:
  * - Executive Productivity Overview with Total Time & Mission Times
  * - "What I Did Today" Work Summary grouped by Mission
  * - Daily Dhikr & Spiritual Remembrance with counts & durations
@@ -178,7 +178,6 @@ export function downloadDayPDF(day: DayLog) {
   y += 6;
 
   // 3. EXECUTIVE PRODUCTIVITY & MISSION DASHBOARD CARD
-  // Compute grouped sessions for "What I Did Today"
   const missionGroups: { mission: string; duration: string; entries: TimeEntry[] }[] = [];
   stats.missions.forEach((m) => {
     const entries = day.entries.filter((e) => e.mission?.trim() === m.mission);
@@ -193,24 +192,24 @@ export function downloadDayPDF(day: DayLog) {
     });
   }
 
-  // Pre-calculate height of Executive Summary
+  // Pre-calculate exact height of Executive Summary
   let summaryHeight = 16; // header & KPI row
   if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
-    summaryHeight += 8; // mission pills row
+    summaryHeight += 5 + stats.missions.length * 4.5 + (stats.untaggedMinutes > 0 ? 4.5 : 0) + 2;
   }
-  summaryHeight += 8; // "What I did today" header
+  summaryHeight += 5.5; // "What I did today" header
   missionGroups.forEach((g) => {
-    summaryHeight += 5.5; // group title
+    summaryHeight += 4.5; // group title
     g.entries.forEach((e) => {
       const dur = calculateDuration(e.startTime, e.endTime);
       const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       const splitLines = doc.splitTextToSize(
-        `• [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' • ' + dur : ''}] ${wText}`,
+        `- [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' | ' + dur : ''}] ${wText}`,
         contentWidth - 14
       );
-      summaryHeight += splitLines.length * 4.2;
+      summaryHeight += splitLines.length * 4;
     });
     summaryHeight += 2;
   });
@@ -285,29 +284,38 @@ export function downloadDayPDF(day: DayLog) {
 
   let curY = kpiY + 7;
 
-  // Missions Breakdown line
+  // Missions Breakdown List (Table layout with exact margins)
   if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
     doc.text('MISSIONS BREAKDOWN:', margin + 7, curY);
+    curY += 4.5;
 
-    let mLine = '';
-    stats.missions.forEach((m, idx) => {
-      mLine += `🎯 ${m.mission}: ${m.duration} (${m.sessionCount} sessions • ${m.percentage}%)`;
-      if (idx < stats.missions.length - 1) mLine += '   |   ';
+    stats.missions.forEach((m) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(180, 83, 9);
+      doc.text(`[ ${m.mission} ]`, margin + 7, curY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`${m.duration}   (${m.sessionCount} sessions | ${m.percentage}%)`, margin + 50, curY);
+      curY += 4.5;
     });
-    if (stats.untaggedMinutes > 0) {
-      if (mLine) mLine += '   |   ';
-      mLine += `⚪ Untagged: ${stats.untaggedDuration} (${stats.untaggedCount} sessions)`;
-    }
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(30, 41, 59);
-    const splitMLine = doc.splitTextToSize(mLine, contentWidth - 14);
-    doc.text(splitMLine, margin + 7, curY + 4.2);
-    curY += splitMLine.length * 4.2 + 4;
+    if (stats.untaggedMinutes > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(100, 116, 139);
+      doc.text('[ General / Untagged ]', margin + 7, curY);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`${stats.untaggedDuration}   (${stats.untaggedCount} sessions)`, margin + 50, curY);
+      curY += 4.5;
+    }
+    curY += 2;
   }
 
   // Work Overview / "What I Did Today"
@@ -321,7 +329,7 @@ export function downloadDayPDF(day: DayLog) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(180, 83, 9);
-    doc.text(`🎯 ${g.mission} (${g.duration}):`, margin + 7, curY);
+    doc.text(`Mission: ${g.mission} (${g.duration}):`, margin + 7, curY);
     curY += 4.2;
 
     g.entries.forEach((e) => {
@@ -330,12 +338,12 @@ export function downloadDayPDF(day: DayLog) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.setTextColor(51, 65, 85);
-      const bullet = `• [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' • ' + dur : ''}] ${wText}`;
+      const bullet = `- [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' | ' + dur : ''}] ${wText}`;
       const splitBullet = doc.splitTextToSize(bullet, contentWidth - 14);
       doc.text(splitBullet, margin + 10, curY);
       curY += splitBullet.length * 4;
     });
-    curY += 1.5;
+    curY += 2;
   });
 
   y += summaryHeight + 6;
@@ -365,8 +373,8 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(50, 55, 65);
     validDhikr.forEach((d) => {
       doc.setFont('helvetica', 'bold');
-      doc.text(`• ${d.name}:`, margin + 6, dY);
-      const nameWidth = doc.getTextWidth(`• ${d.name}: `);
+      doc.text(`- ${d.name}:`, margin + 6, dY);
+      const nameWidth = doc.getTextWidth(`- ${d.name}: `);
       doc.setFont('helvetica', 'normal');
       doc.text(`${d.count}`, margin + 6 + nameWidth, dY);
       dY += 5;
@@ -399,7 +407,7 @@ export function downloadDayPDF(day: DayLog) {
   day.entries.forEach((entry, index) => {
     const duration = calculateDuration(entry.startTime, entry.endTime);
     const timeText = duration
-      ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} • ${duration} ]`
+      ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} | ${duration} ]`
       : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
     const workText = getFormattedWorkLines(entry);
     const notesText = entry.notes?.trim() || '';
@@ -438,9 +446,9 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(255, 255, 255);
     doc.text(timeText, margin + 6.5, y + 7.8);
 
-    // Mission badge if present
+    // Mission badge if present (clean ASCII, NO emojis)
     if (entry.mission) {
-      const missionText = `🎯 Mission: ${entry.mission}`;
+      const missionText = `Mission: ${entry.mission}`;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       const mWidth = doc.getTextWidth(missionText) + 5;
@@ -502,7 +510,7 @@ export function downloadDayPDF(day: DayLog) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(30, 35, 45);
-    doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+    doc.text('MOBILE DIGITAL WELLBEING - APP SCREEN TIME:', margin + 4, y + 6);
 
     let appY = y + 11;
     doc.setFont('helvetica', 'normal');
@@ -510,7 +518,7 @@ export function downloadDayPDF(day: DayLog) {
     doc.setTextColor(60, 65, 75);
 
     validApps.forEach((app) => {
-      doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+      doc.text(`- ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
       appY += 5;
     });
 
@@ -614,10 +622,10 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setFontSize(11);
   doc.setTextColor(25, 30, 45);
   const duration = calculateDuration(entry.startTime, entry.endTime);
-  const missionDisplay = entry.mission ? `   |   🎯 Mission: ${entry.mission}` : '';
+  const missionDisplay = entry.mission ? `   |   Mission: ${entry.mission}` : '';
   const timeDisplay = duration
-    ? `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
-    : `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}${missionDisplay}`;
+    ? `${entry.startTime || '--:--'} - ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
+    : `${entry.startTime || '--:--'} - ${entry.endTime || '--:--'}${missionDisplay}`;
   doc.text(timeDisplay, margin + 4, y + 12.5);
 
   y += 24;
@@ -781,7 +789,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
   if (multiStats.missions.length > 0) {
     let mLine = 'Missions Breakdown: ';
     multiStats.missions.forEach((m, idx) => {
-      mLine += `🎯 ${m.mission}: ${m.duration} (${m.sessionCount} sessions • ${m.percentage}%)`;
+      mLine += `[${m.mission}] ${m.duration} (${m.sessionCount} sessions | ${m.percentage}%)`;
       if (idx < multiStats.missions.length - 1) mLine += '   |   ';
     });
     doc.setFont('helvetica', 'normal');
@@ -834,7 +842,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
     doc.setTextColor(20, 25, 35);
     doc.text(day.name || `Day ${dayIndex + 1}`, margin + 4, y + 5);
 
-    let mBadgeStr = dayStats.missions.map((m) => `🎯 ${m.mission}: ${m.duration}`).join('  •  ');
+    let mBadgeStr = dayStats.missions.map((m) => `[${m.mission}: ${m.duration}]`).join('  ');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(100, 105, 115);
@@ -858,7 +866,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       day.entries.forEach((entry, index) => {
         const duration = calculateDuration(entry.startTime, entry.endTime);
         const timeText = duration
-          ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} • ${duration} ]`
+          ? `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} | ${duration} ]`
           : `[ ${entry.startTime || '--:--'} - ${entry.endTime || '--:--'} ]`;
         const workText = getFormattedWorkLines(entry);
         const notesText = entry.notes?.trim() || '';
@@ -897,9 +905,9 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setTextColor(255, 255, 255);
         doc.text(timeText, margin + 6.5, y + 7.8);
 
-        // Mission badge if present
+        // Mission badge if present (NO emojis)
         if (entry.mission) {
-          const missionText = `🎯 Mission: ${entry.mission}`;
+          const missionText = `Mission: ${entry.mission}`;
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(7.5);
           const mWidth = doc.getTextWidth(missionText) + 5;
@@ -964,7 +972,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9);
         doc.setTextColor(30, 35, 45);
-        doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+        doc.text('MOBILE DIGITAL WELLBEING - APP SCREEN TIME:', margin + 4, y + 6);
 
         let appY = y + 11;
         doc.setFont('helvetica', 'normal');
@@ -972,7 +980,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         doc.setTextColor(60, 65, 75);
 
         validApps.forEach((app) => {
-          doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+          doc.text(`- ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
           appY += 5;
         });
 
@@ -1000,7 +1008,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       doc.setTextColor(60, 65, 75);
 
       validDhikr.forEach((item) => {
-        doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
+        doc.text(`- ${item.name}: ${item.count}`, margin + 5, dhikrY);
         dhikrY += 5;
       });
 
