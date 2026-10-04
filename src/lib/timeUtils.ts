@@ -112,3 +112,70 @@ export function calculateMissionDurations(entries: TimeEntry[]): MissionDuration
     }))
     .sort((a, b) => b.minutes - a.minutes);
 }
+
+export interface MissionSummaryItem {
+  mission: string;
+  duration: string;
+  minutes: number;
+  sessionCount: number;
+  percentage: number;
+}
+
+export interface DayDetailedStats {
+  totalDuration: string;
+  totalMinutes: number;
+  totalSessions: number;
+  missions: MissionSummaryItem[];
+  untaggedDuration: string;
+  untaggedMinutes: number;
+  untaggedCount: number;
+}
+
+/**
+ * Calculates detailed statistics for day entries including missions breakdown,
+ * percentages, session counts, and untagged time.
+ */
+export function calculateDayDetailedStats(entries: TimeEntry[]): DayDetailedStats {
+  let totalMins = 0;
+  const missionMap: Record<string, { minutes: number; count: number }> = {};
+  let untaggedMins = 0;
+  let untaggedCount = 0;
+
+  entries.forEach((e) => {
+    const mins = calculateDurationMinutes(e.startTime, e.endTime);
+    if (mins > 0) {
+      totalMins += mins;
+      const mName = e.mission?.trim();
+      if (mName) {
+        if (!missionMap[mName]) {
+          missionMap[mName] = { minutes: 0, count: 0 };
+        }
+        missionMap[mName].minutes += mins;
+        missionMap[mName].count += 1;
+      } else {
+        untaggedMins += mins;
+        untaggedCount += 1;
+      }
+    }
+  });
+
+  const missions: MissionSummaryItem[] = Object.entries(missionMap)
+    .map(([mission, data]) => ({
+      mission,
+      duration: formatMinutes(data.minutes),
+      minutes: data.minutes,
+      sessionCount: data.count,
+      percentage: totalMins > 0 ? Math.round((data.minutes / totalMins) * 100) : 0,
+    }))
+    .sort((a, b) => b.minutes - a.minutes);
+
+  return {
+    totalDuration: formatMinutes(totalMins),
+    totalMinutes: totalMins,
+    totalSessions: entries.length,
+    missions,
+    untaggedDuration: formatMinutes(untaggedMins),
+    untaggedMinutes: untaggedMins,
+    untaggedCount,
+  };
+}

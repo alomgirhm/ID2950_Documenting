@@ -1,6 +1,11 @@
 import { jsPDF } from 'jspdf';
 import { DayLog, TimeEntry } from '@/types';
-import { calculateDuration, calculateDayTotalDuration, calculateMissionDurations } from '@/lib/timeUtils';
+import {
+  calculateDuration,
+  calculateDayTotalDuration,
+  calculateMissionDurations,
+  calculateDayDetailedStats,
+} from '@/lib/timeUtils';
 
 function getFormattedWorkLines(entry: TimeEntry): string {
   if (entry.works && entry.works.length > 0) {
@@ -93,8 +98,13 @@ function createQuranVerseImage(): string | null {
 }
 
 /**
- * Downloads a clean, beautifully formatted PDF report for an entire day,
- * including all sessions, time ranges, multiple numbered works, and dropable notes/learnings.
+ * Downloads a complete, beautiful executive PDF report for an entire day:
+ * - Executive Productivity Overview with Total Time & Mission Times
+ * - "What I Did Today" Work Summary grouped by Mission
+ * - Daily Dhikr & Spiritual Remembrance with counts & durations
+ * - Quranic verse card
+ * - Detailed session cards with full learnings & notes
+ * - Mobile Digital Wellbeing app screen time
  */
 export function downloadDayPDF(day: DayLog) {
   const doc = new jsPDF({
@@ -118,6 +128,23 @@ export function downloadDayPDF(day: DayLog) {
     return false;
   };
 
+  const now = new Date();
+  const timeStamp = now.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const stats = calculateDayDetailedStats(day.entries);
+  const validDhikr = (day.dhikrList || []).filter(
+    (d) => d.name?.trim().length > 0 && d.count && d.count.trim().length > 0
+  );
+  const validApps = (day.appUsage || []).filter(
+    (a) => a.appName?.trim().length > 0
+  );
+
   // 1. Header Banner
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -133,41 +160,222 @@ export function downloadDayPDF(day: DayLog) {
 
   // 2. Day & Date info
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(15);
   doc.setTextColor(30, 30, 35);
   doc.text(day.name || 'Untitled Day', margin, y);
 
-  // Month tag & timestamp
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  doc.setTextColor(120, 120, 130);
-  const now = new Date();
-  const timeStamp = now.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const totalDayTime = calculateDayTotalDuration(day.entries);
-  const missionTimes = calculateMissionDurations(day.entries);
-  const missionStr = missionTimes.map((m) => `${m.mission}: ${m.duration}`).join('   |   ');
-  doc.text(
-    `Month: ${day.month}   |   Exported: ${timeStamp}${totalDayTime ? `   |   Total: ${totalDayTime}` : ''}${missionStr ? `   |   ${missionStr}` : ''}`,
-    margin,
-    y + 5
-  );
+  doc.setTextColor(115, 120, 130);
+  doc.text(`Month: ${day.month || 'Active Month'}   |   Exported: ${timeStamp}`, margin, y + 5);
 
-  y += 11;
+  y += 10;
 
   // Divider
   doc.setDrawColor(210, 210, 220);
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
-
   y += 6;
 
-  // Quranic Verse Card
+  // 3. EXECUTIVE PRODUCTIVITY & MISSION DASHBOARD CARD
+  // Compute grouped sessions for "What I Did Today"
+  const missionGroups: { mission: string; duration: string; entries: TimeEntry[] }[] = [];
+  stats.missions.forEach((m) => {
+    const entries = day.entries.filter((e) => e.mission?.trim() === m.mission);
+    missionGroups.push({ mission: m.mission, duration: m.duration, entries });
+  });
+  const untaggedEntries = day.entries.filter((e) => !e.mission?.trim());
+  if (untaggedEntries.length > 0) {
+    missionGroups.push({
+      mission: 'General / Untagged',
+      duration: stats.untaggedDuration || 'Untracked',
+      entries: untaggedEntries,
+    });
+  }
+
+  // Pre-calculate height of Executive Summary
+  let summaryHeight = 16; // header & KPI row
+  if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
+    summaryHeight += 8; // mission pills row
+  }
+  summaryHeight += 8; // "What I did today" header
+  missionGroups.forEach((g) => {
+    summaryHeight += 5.5; // group title
+    g.entries.forEach((e) => {
+      const dur = calculateDuration(e.startTime, e.endTime);
+      const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      const splitLines = doc.splitTextToSize(
+        `• [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' • ' + dur : ''}] ${wText}`,
+        contentWidth - 14
+      );
+      summaryHeight += splitLines.length * 4.2;
+    });
+    summaryHeight += 2;
+  });
+  summaryHeight += 6; // padding
+
+  checkPageBreak(summaryHeight + 6);
+
+  // Background card
+  doc.setFillColor(248, 250, 253);
+  doc.setDrawColor(218, 224, 234);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(margin, y, contentWidth, summaryHeight, 2.5, 2.5, 'FD');
+
+  // Amber accent strip on left
+  doc.setFillColor(217, 119, 6);
+  doc.rect(margin, y + 2, 3, summaryHeight - 4, 'F');
+
+  // Title: EXECUTIVE PRODUCTIVITY & MISSIONS OVERVIEW
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  doc.text('EXECUTIVE PRODUCTIVITY & MISSIONS OVERVIEW', margin + 7, y + 6);
+
+  // Key KPI Badges row
+  let kpiY = y + 12;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+
+  // Total Time Badge
+  const totalText = `Total Time: ${stats.totalDuration || '0m'}`;
+  const totalW = doc.getTextWidth(totalText) + 8;
+  doc.setFillColor(254, 243, 199);
+  doc.setDrawColor(217, 119, 6);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(margin + 7, kpiY - 4, totalW, 5.8, 1.2, 1.2, 'FD');
+  doc.setTextColor(180, 83, 9);
+  doc.text(totalText, margin + 11, kpiY);
+
+  // Sessions Badge
+  const sessText = `${day.entries.length} Sessions`;
+  const sessW = doc.getTextWidth(sessText) + 8;
+  const sessX = margin + 7 + totalW + 3;
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(sessX, kpiY - 4, sessW, 5.8, 1.2, 1.2, 'FD');
+  doc.setTextColor(51, 65, 85);
+  doc.text(sessText, sessX + 4, kpiY);
+
+  // Dhikr Badge (if present)
+  if (validDhikr.length > 0) {
+    const dhikrBadge = `${validDhikr.length} Dhikr Recorded`;
+    const dhikrW = doc.getTextWidth(dhikrBadge) + 8;
+    const dhikrX = sessX + sessW + 3;
+    doc.setFillColor(254, 252, 232);
+    doc.setDrawColor(202, 138, 4);
+    doc.roundedRect(dhikrX, kpiY - 4, dhikrW, 5.8, 1.2, 1.2, 'FD');
+    doc.setTextColor(161, 98, 7);
+    doc.text(dhikrBadge, dhikrX + 4, kpiY);
+  }
+
+  // Mobile Apps Badge (if present)
+  if (validApps.length > 0) {
+    const appBadge = `${validApps.length} Apps Tracked`;
+    const appW = doc.getTextWidth(appBadge) + 8;
+    const appX = contentWidth + margin - appW - 3;
+    doc.setFillColor(238, 242, 255);
+    doc.setDrawColor(165, 180, 252);
+    doc.roundedRect(appX, kpiY - 4, appW, 5.8, 1.2, 1.2, 'FD');
+    doc.setTextColor(67, 56, 202);
+    doc.text(appBadge, appX + 4, kpiY);
+  }
+
+  let curY = kpiY + 7;
+
+  // Missions Breakdown line
+  if (stats.missions.length > 0 || stats.untaggedMinutes > 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text('MISSIONS BREAKDOWN:', margin + 7, curY);
+
+    let mLine = '';
+    stats.missions.forEach((m, idx) => {
+      mLine += `🎯 ${m.mission}: ${m.duration} (${m.sessionCount} sessions • ${m.percentage}%)`;
+      if (idx < stats.missions.length - 1) mLine += '   |   ';
+    });
+    if (stats.untaggedMinutes > 0) {
+      if (mLine) mLine += '   |   ';
+      mLine += `⚪ Untagged: ${stats.untaggedDuration} (${stats.untaggedCount} sessions)`;
+    }
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    const splitMLine = doc.splitTextToSize(mLine, contentWidth - 14);
+    doc.text(splitMLine, margin + 7, curY + 4.2);
+    curY += splitMLine.length * 4.2 + 4;
+  }
+
+  // Work Overview / "What I Did Today"
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text('WHAT I DID TODAY (WORK OVERVIEW):', margin + 7, curY);
+  curY += 4.5;
+
+  missionGroups.forEach((g) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(180, 83, 9);
+    doc.text(`🎯 ${g.mission} (${g.duration}):`, margin + 7, curY);
+    curY += 4.2;
+
+    g.entries.forEach((e) => {
+      const dur = calculateDuration(e.startTime, e.endTime);
+      const wText = getFormattedWorkLines(e).replace(/\n/g, ' ');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(51, 65, 85);
+      const bullet = `• [${e.startTime || '--:--'} - ${e.endTime || '--:--'}${dur ? ' • ' + dur : ''}] ${wText}`;
+      const splitBullet = doc.splitTextToSize(bullet, contentWidth - 14);
+      doc.text(splitBullet, margin + 10, curY);
+      curY += splitBullet.length * 4;
+    });
+    curY += 1.5;
+  });
+
+  y += summaryHeight + 6;
+
+  // 4. DAILY DHIKR & SPIRITUAL REMEMBRANCE CARD (Prominently displayed)
+  if (validDhikr.length > 0) {
+    const dhikrBoxHeight = 11 + validDhikr.length * 5.2;
+    checkPageBreak(dhikrBoxHeight + 6);
+
+    doc.setFillColor(254, 252, 246);
+    doc.setDrawColor(228, 212, 175);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
+
+    // Amber vertical strip on left
+    doc.setFillColor(180, 83, 9);
+    doc.rect(margin, y + 1.5, 2.5, dhikrBoxHeight - 3, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(160, 85, 10);
+    doc.text('DAILY DHIKR & SPIRITUAL REMEMBRANCE:', margin + 6, y + 6);
+
+    let dY = y + 11;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(50, 55, 65);
+    validDhikr.forEach((d) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(`• ${d.name}:`, margin + 6, dY);
+      const nameWidth = doc.getTextWidth(`• ${d.name}: `);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${d.count}`, margin + 6 + nameWidth, dY);
+      dY += 5;
+    });
+
+    y += dhikrBoxHeight + 5;
+  }
+
+  // 5. Quranic Verse Card
   const verseImg = createQuranVerseImage();
   if (verseImg) {
     const verseHeight = 22;
@@ -176,7 +384,18 @@ export function downloadDayPDF(day: DayLog) {
     y += verseHeight + 6;
   }
 
-  // 3. Loop over all time blocks / sessions
+  // Section Header: DETAILED SESSION LOGS & LEARNING NOTES
+  checkPageBreak(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(30, 35, 45);
+  doc.text('DETAILED SESSION LOGS & LEARNING NOTES', margin, y + 2);
+  doc.setDrawColor(215, 220, 228);
+  doc.setLineWidth(0.3);
+  doc.line(margin, y + 5, margin + contentWidth, y + 5);
+  y += 9;
+
+  // 6. Loop over all time blocks / sessions
   day.entries.forEach((entry, index) => {
     const duration = calculateDuration(entry.startTime, entry.endTime);
     const timeText = duration
@@ -185,13 +404,13 @@ export function downloadDayPDF(day: DayLog) {
     const workText = getFormattedWorkLines(entry);
     const notesText = entry.notes?.trim() || '';
 
-    // Measure Work Text accurately with bold 9.5pt font across full card width
+    // Measure Work Text
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
     const workHeight = splitWork.length * 4.8;
 
-    // Measure Notes Text accurately with normal 8.5pt font
+    // Measure Notes Text
     let notesHeight = 0;
     let splitNotes: string[] = [];
     if (notesText) {
@@ -204,13 +423,13 @@ export function downloadDayPDF(day: DayLog) {
     const totalBlockHeight = 13 + workHeight + notesHeight + 4;
     checkPageBreak(totalBlockHeight + 4);
 
-    // 1. Entry Card Box Background
+    // Entry Card Box Background
     doc.setFillColor(250, 250, 252);
     doc.setDrawColor(226, 230, 236);
     doc.setLineWidth(0.3);
     doc.roundedRect(margin, y, contentWidth, totalBlockHeight, 2, 2, 'FD');
 
-    // 2. Top Header inside Card: Time badge with duration
+    // Top Header inside Card: Time badge with duration
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     const badgeWidth = Math.max(34, doc.getTextWidth(timeText) + 5);
@@ -221,26 +440,26 @@ export function downloadDayPDF(day: DayLog) {
 
     // Mission badge if present
     if (entry.mission) {
-      const missionText = `Mission: ${entry.mission}`;
+      const missionText = `🎯 Mission: ${entry.mission}`;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       const mWidth = doc.getTextWidth(missionText) + 5;
       const mX = margin + 4 + badgeWidth + 2.5;
-      doc.setFillColor(254, 243, 199); // warm light amber
-      doc.setDrawColor(217, 119, 6);   // amber border
+      doc.setFillColor(254, 243, 199);
+      doc.setDrawColor(217, 119, 6);
       doc.setLineWidth(0.2);
       doc.roundedRect(mX, y + 3.5, mWidth, 6.5, 1.5, 1.5, 'FD');
       doc.setTextColor(180, 83, 9);
       doc.text(missionText, mX + 2.5, y + 7.8);
     }
 
-    // Session index label on the right
+    // Session index label on right
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(140, 145, 155);
     doc.text(`Session #${index + 1}`, margin + contentWidth - 22, y + 7.8);
 
-    // 3. Work description (Full width, padded on both sides, NEVER overflows)
+    // Work description
     const workStartY = y + 15;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
@@ -249,7 +468,7 @@ export function downloadDayPDF(day: DayLog) {
 
     let currentBlockY = workStartY + workHeight + 1.5;
 
-    // 4. Notes / Learnings section inside the card
+    // Notes / Learnings section inside the card
     if (notesText) {
       doc.setDrawColor(230, 233, 238);
       doc.setLineWidth(0.2);
@@ -258,11 +477,10 @@ export function downloadDayPDF(day: DayLog) {
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.setTextColor(180, 100, 10); // warm amber
+      doc.setTextColor(180, 100, 10);
       doc.text('LEARNINGS & SESSION NOTES:', margin + 5, currentBlockY);
 
       currentBlockY += 4;
-
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(45, 50, 60);
@@ -272,84 +490,51 @@ export function downloadDayPDF(day: DayLog) {
     y += totalBlockHeight + 4;
   });
 
-  // Digital Wellbeing App Screen Time section in PDF
-  if (day.appUsage && day.appUsage.length > 0) {
-    const validApps = day.appUsage.filter((a) => a.appName.trim().length > 0);
-    if (validApps.length > 0) {
-      const wellbeingBoxHeight = 12 + validApps.length * 5.5;
-      checkPageBreak(wellbeingBoxHeight + 8);
-      y += 2;
-      doc.setFillColor(245, 247, 250);
-      doc.setDrawColor(220, 225, 230);
-      doc.roundedRect(margin, y, contentWidth, wellbeingBoxHeight, 2, 2, 'FD');
+  // 7. Mobile Digital Wellbeing (App Screen Time)
+  if (validApps.length > 0) {
+    const wellbeingBoxHeight = 12 + validApps.length * 5.5;
+    checkPageBreak(wellbeingBoxHeight + 8);
+    y += 2;
+    doc.setFillColor(245, 247, 250);
+    doc.setDrawColor(220, 225, 230);
+    doc.roundedRect(margin, y, contentWidth, wellbeingBoxHeight, 2, 2, 'FD');
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(30, 35, 45);
-      doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(30, 35, 45);
+    doc.text('MOBILE DIGITAL WELLBEING — APP SCREEN TIME:', margin + 4, y + 6);
 
-      let appY = y + 11;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(60, 65, 75);
+    let appY = y + 11;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(60, 65, 75);
 
-      validApps.forEach((app) => {
-        doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
-        appY += 5;
-      });
+    validApps.forEach((app) => {
+      doc.text(`• ${app.appName}: ${app.duration || '0m'}`, margin + 5, appY);
+      appY += 5;
+    });
 
-      y += wellbeingBoxHeight + 4;
-    }
+    y += wellbeingBoxHeight + 4;
   }
 
-  // Daily Dhikr & Remembrance section in PDF
-  if (day.dhikrList && day.dhikrList.length > 0) {
-    const validDhikr = day.dhikrList.filter(
-      (d) => d.name.trim().length > 0 && d.count && d.count.trim().length > 0
+  // 8. Numbered Footer on all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(140, 140, 150);
+    doc.text(
+      `ID2950_Documenting Personal Operating System — Generated with self-assigned time & notes. Total Sessions: ${day.entries.length}`,
+      margin,
+      pageHeight - 9
     );
-    if (validDhikr.length > 0) {
-      const dhikrBoxHeight = 12 + validDhikr.length * 5.5;
-      checkPageBreak(dhikrBoxHeight + 8);
-      y += 2;
-      doc.setFillColor(254, 252, 246);
-      doc.setDrawColor(228, 212, 175);
-      doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(160, 90, 10);
-      doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
-
-      let dhikrY = y + 11;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(60, 65, 75);
-
-      validDhikr.forEach((item) => {
-        doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
-        dhikrY += 5;
-      });
-
-      y += dhikrBoxHeight + 4;
-    }
+    doc.text(`Page ${i} of ${totalPages}`, margin + contentWidth - 18, pageHeight - 9);
   }
-
-
-  // Footer on last page
-  checkPageBreak(15);
-  y = Math.min(y + 6, pageHeight - 12);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.setTextColor(140, 140, 150);
-  doc.text(
-    `ID2950_Documenting Personal Operating System — Generated with self-assigned time & notes. Total Sessions: ${day.entries.length}`,
-    margin,
-    y
-  );
 
   // File download name sanitization
   const safeName = (day.name || 'Day').replace(/[^a-zA-Z0-9_-]/g, '_');
-  doc.save(`ID2950_Documenting_${safeName}_Notes.pdf`);
+  doc.save(`ID2950_Documenting_${safeName}_Report.pdf`);
 }
 
 /**
@@ -429,7 +614,7 @@ export function downloadSingleSessionPDF(day: DayLog, entry: TimeEntry) {
   doc.setFontSize(11);
   doc.setTextColor(25, 30, 45);
   const duration = calculateDuration(entry.startTime, entry.endTime);
-  const missionDisplay = entry.mission ? `   |   Mission: ${entry.mission}` : '';
+  const missionDisplay = entry.mission ? `   |   🎯 Mission: ${entry.mission}` : '';
   const timeDisplay = duration
     ? `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}   (Duration: ${duration})${missionDisplay}`
     : `${entry.startTime || '--:--'} — ${entry.endTime || '--:--'}${missionDisplay}`;
@@ -507,6 +692,18 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
     return false;
   };
 
+  const now = new Date();
+  const timeStamp = now.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const allEntries = selectedDays.flatMap((d) => d.entries);
+  const multiStats = calculateDayDetailedStats(allEntries);
+
   // 1. Header Banner on first page
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -522,38 +719,79 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
 
   // 2. Title & Range info
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
+  doc.setFontSize(15);
   doc.setTextColor(30, 30, 35);
   const displayRange = rangeLabel || `Combined Report (${selectedDays.length} Days)`;
   doc.text(displayRange, margin, y);
 
-  // Stats banner
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(120, 120, 130);
-  const now = new Date();
-  const timeStamp = now.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const totalSessions = selectedDays.reduce((acc, d) => acc + d.entries.length, 0);
   doc.text(
-    `Total Days: ${selectedDays.length}   |   Total Sessions: ${totalSessions}   |   Exported: ${timeStamp}`,
+    `Total Days: ${selectedDays.length}   |   Total Sessions: ${allEntries.length}   |   Exported: ${timeStamp}`,
     margin,
     y + 5
   );
 
-  y += 11;
+  y += 10;
 
   // Divider
   doc.setDrawColor(210, 210, 220);
   doc.setLineWidth(0.4);
   doc.line(margin, y, margin + contentWidth, y);
-
   y += 6;
+
+  // MULTI-DAY OVERALL SUMMARY DASHBOARD
+  const multiBoxHeight = 22 + (multiStats.missions.length > 0 ? 8 : 0);
+  doc.setFillColor(248, 250, 253);
+  doc.setDrawColor(218, 224, 234);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(margin, y, contentWidth, multiBoxHeight, 2, 2, 'FD');
+
+  doc.setFillColor(217, 119, 6);
+  doc.rect(margin, y + 2, 3, multiBoxHeight - 4, 'F');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(30, 41, 59);
+  doc.text('COMBINED PERIOD EXECUTIVE SUMMARY', margin + 7, y + 6);
+
+  let mkpiY = y + 12;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+
+  const mTotalText = `Total Time: ${multiStats.totalDuration || '0m'}`;
+  const mTotalW = doc.getTextWidth(mTotalText) + 8;
+  doc.setFillColor(254, 243, 199);
+  doc.setDrawColor(217, 119, 6);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(margin + 7, mkpiY - 4, mTotalW, 5.8, 1.2, 1.2, 'FD');
+  doc.setTextColor(180, 83, 9);
+  doc.text(mTotalText, margin + 11, mkpiY);
+
+  const mSessText = `${allEntries.length} Total Sessions across ${selectedDays.length} Days`;
+  const mSessW = doc.getTextWidth(mSessText) + 8;
+  const mSessX = margin + 7 + mTotalW + 3;
+  doc.setFillColor(241, 245, 249);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(mSessX, mkpiY - 4, mSessW, 5.8, 1.2, 1.2, 'FD');
+  doc.setTextColor(51, 65, 85);
+  doc.text(mSessText, mSessX + 4, mkpiY);
+
+  if (multiStats.missions.length > 0) {
+    let mLine = 'Missions Breakdown: ';
+    multiStats.missions.forEach((m, idx) => {
+      mLine += `🎯 ${m.mission}: ${m.duration} (${m.sessionCount} sessions • ${m.percentage}%)`;
+      if (idx < multiStats.missions.length - 1) mLine += '   |   ';
+    });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(51, 65, 85);
+    const splitMLine = doc.splitTextToSize(mLine, contentWidth - 14);
+    doc.text(splitMLine, margin + 7, mkpiY + 7);
+  }
+
+  y += multiBoxHeight + 6;
 
   // Quranic Verse Card on first page
   const verseImg = createQuranVerseImage();
@@ -566,7 +804,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
 
   // 3. Loop through each day
   selectedDays.forEach((day, dayIndex) => {
-    // If not first day, check if space is tight, else add divider
+    // If not first day, add separator
     if (dayIndex > 0) {
       if (y > pageHeight - margin - 50) {
         doc.addPage();
@@ -580,27 +818,33 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
       }
     }
 
+    const dayStats = calculateDayDetailedStats(day.entries);
+    const validDhikr = (day.dhikrList || []).filter(
+      (d) => d.name?.trim().length > 0 && d.count && d.count.trim().length > 0
+    );
+
     // Day Section Header Banner
     checkPageBreak(25);
     doc.setFillColor(242, 244, 248);
     doc.setDrawColor(218, 222, 230);
-    doc.roundedRect(margin, y, contentWidth, 10, 1.5, 1.5, 'FD');
+    doc.roundedRect(margin, y, contentWidth, 12, 1.5, 1.5, 'FD');
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(20, 25, 35);
-    doc.text(day.name || `Day ${dayIndex + 1}`, margin + 4, y + 6.8);
+    doc.text(day.name || `Day ${dayIndex + 1}`, margin + 4, y + 5);
 
+    let mBadgeStr = dayStats.missions.map((m) => `🎯 ${m.mission}: ${m.duration}`).join('  •  ');
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(100, 105, 115);
     doc.text(
-      `Month: ${day.month}  •  ${day.entries.length} Sessions`,
-      margin + contentWidth - 45,
-      y + 6.8
+      `Total: ${dayStats.totalDuration || '0m'} (${day.entries.length} Sessions)${mBadgeStr ? '   |   ' + mBadgeStr : ''}`,
+      margin + 4,
+      y + 9.5
     );
 
-    y += 14;
+    y += 16;
 
     // Day Entries
     if (day.entries.length === 0) {
@@ -619,13 +863,13 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
         const workText = getFormattedWorkLines(entry);
         const notesText = entry.notes?.trim() || '';
 
-        // Measure Work Text accurately with bold 9.5pt font
+        // Measure Work Text
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9.5);
         const splitWork = doc.splitTextToSize(workText, contentWidth - 12);
         const workHeight = splitWork.length * 4.8;
 
-        // Measure Notes Text accurately with normal 8.5pt font
+        // Measure Notes Text
         let notesHeight = 0;
         let splitNotes: string[] = [];
         if (notesText) {
@@ -655,26 +899,26 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
 
         // Mission badge if present
         if (entry.mission) {
-          const missionText = `Mission: ${entry.mission}`;
+          const missionText = `🎯 Mission: ${entry.mission}`;
           doc.setFont('helvetica', 'bold');
           doc.setFontSize(7.5);
           const mWidth = doc.getTextWidth(missionText) + 5;
           const mX = margin + 4 + badgeWidth + 2.5;
-          doc.setFillColor(254, 243, 199); // warm light amber
-          doc.setDrawColor(217, 119, 6);   // amber border
+          doc.setFillColor(254, 243, 199);
+          doc.setDrawColor(217, 119, 6);
           doc.setLineWidth(0.2);
           doc.roundedRect(mX, y + 3.5, mWidth, 6.5, 1.5, 1.5, 'FD');
           doc.setTextColor(180, 83, 9);
           doc.text(missionText, mX + 2.5, y + 7.8);
         }
 
-        // Session index label on the right
+        // Session index label on right
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.setTextColor(140, 145, 155);
         doc.text(`Session #${index + 1}`, margin + contentWidth - 22, y + 7.8);
 
-        // Work Title (Full width, padded on both sides, NEVER overflows)
+        // Work description
         const workStartY = y + 15;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(9.5);
@@ -683,7 +927,7 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
 
         let currentBlockY = workStartY + workHeight + 1.5;
 
-        // Notes inside card
+        // Notes / Learnings section inside the card
         if (notesText) {
           doc.setDrawColor(230, 233, 238);
           doc.setLineWidth(0.2);
@@ -737,54 +981,48 @@ export function downloadMultiDayPDF(selectedDays: DayLog[], rangeLabel?: string)
     }
 
     // Daily Dhikr & Remembrance section in Multi-Day PDF
-    if (day.dhikrList && day.dhikrList.length > 0) {
-      const validDhikr = day.dhikrList.filter(
-        (d) => d.name.trim().length > 0 && d.count && d.count.trim().length > 0
-      );
-      if (validDhikr.length > 0) {
-        const dhikrBoxHeight = 12 + validDhikr.length * 5.5;
-        checkPageBreak(dhikrBoxHeight + 8);
-        y += 2;
-        doc.setFillColor(254, 252, 246);
-        doc.setDrawColor(228, 212, 175);
-        doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
+    if (validDhikr.length > 0) {
+      const dhikrBoxHeight = 12 + validDhikr.length * 5.5;
+      checkPageBreak(dhikrBoxHeight + 8);
+      y += 2;
+      doc.setFillColor(254, 252, 246);
+      doc.setDrawColor(228, 212, 175);
+      doc.roundedRect(margin, y, contentWidth, dhikrBoxHeight, 2, 2, 'FD');
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(160, 90, 10);
-        doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(160, 90, 10);
+      doc.text('DAILY DHIKR & REMEMBRANCE:', margin + 4, y + 6);
 
-        let dhikrY = y + 11;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(60, 65, 75);
+      let dhikrY = y + 11;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(60, 65, 75);
 
-        validDhikr.forEach((item) => {
-          doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
-          dhikrY += 5;
-        });
+      validDhikr.forEach((item) => {
+        doc.text(`• ${item.name}: ${item.count}`, margin + 5, dhikrY);
+        dhikrY += 5;
+      });
 
-        y += dhikrBoxHeight + 4;
-      }
+      y += dhikrBoxHeight + 4;
     }
-
-    y += 2;
   });
 
-  // Footer on last page
-  checkPageBreak(15);
-  y = Math.min(y + 6, pageHeight - 12);
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8);
-  doc.setTextColor(140, 140, 150);
-  doc.text(
-    `ID2950_Documenting Personal Operating System — Multi-Day Report (${selectedDays.length} Days, ${totalSessions} Total Sessions)`,
-    margin,
-    y
-  );
+  // Footer on all pages
+  const totalMultiPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalMultiPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(8);
+    doc.setTextColor(140, 140, 150);
+    doc.text(
+      `ID2950_Documenting Personal Operating System — Generated with self-assigned time & notes. Total Days: ${selectedDays.length}`,
+      margin,
+      pageHeight - 9
+    );
+    doc.text(`Page ${i} of ${totalMultiPages}`, margin + contentWidth - 18, pageHeight - 9);
+  }
 
-  // Filename
-  const safeRange = (rangeLabel || `Days_${selectedDays.length}`).replace(/[^a-zA-Z0-9_-]/g, '_');
-  doc.save(`ID2950_Documenting_MultiDay_${safeRange}.pdf`);
+  const safeTitle = (rangeLabel || 'MultiDay_Report').replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`ID2950_Documenting_${safeTitle}.pdf`);
 }
-
