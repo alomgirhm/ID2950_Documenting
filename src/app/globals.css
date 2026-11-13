@@ -56,44 +56,30 @@ html.light ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* Backgrounds */
-html.light .bg-neutral-950,
-html.light .bg-black {
+/* Universal Neutral Backgrounds (Matches all opacities e.g. /90, /80, /60, /40) */
+html.light [class*="bg-neutral-950"],
+html.light [class*="bg-black"] {
   background-color: #ffffff !important;
 }
 
-html.light .bg-neutral-950\/60,
-html.light .bg-neutral-950\/80 {
-  background-color: #f8fafc !important;
-}
-
-html.light .bg-neutral-900 {
+html.light [class*="bg-neutral-900"] {
   background-color: #ffffff !important;
 }
 
-html.light .bg-neutral-900\/60,
-html.light .bg-neutral-900\/40,
-html.light .bg-neutral-900\/50 {
-  background-color: #ffffff !important;
-}
-
-html.light .bg-neutral-850,
-html.light .bg-neutral-800 {
+html.light [class*="bg-neutral-850"],
+html.light [class*="bg-neutral-800"] {
   background-color: #f1f5f9 !important;
 }
 
 html.light .hover\:bg-neutral-850:hover,
 html.light .hover\:bg-neutral-800:hover,
-html.light .hover\:bg-neutral-900:hover {
+html.light .hover\:bg-neutral-900:hover,
+html.light [class*="hover:bg-neutral-"]:hover {
   background-color: #e2e8f0 !important;
 }
 
-/* Borders */
-html.light .border-neutral-900,
-html.light .border-neutral-850,
-html.light .border-neutral-800,
-html.light .border-neutral-750,
-html.light .border-neutral-700 {
+/* Universal Neutral Borders */
+html.light [class*="border-neutral-"] {
   border-color: #e2e8f0 !important;
 }
 
@@ -106,26 +92,55 @@ html.light .shadow-md {
 
 /* Typography in Light Mode */
 html.light .text-white,
-html.light .text-neutral-100,
-html.light .text-neutral-200 {
+html.light [class*="text-neutral-100"],
+html.light [class*="text-neutral-200"] {
   color: #0f172a !important;
 }
 
-html.light .text-neutral-300,
-html.light .text-neutral-400 {
+html.light [class*="text-neutral-300"],
+html.light [class*="text-neutral-400"] {
   color: #334155 !important;
 }
 
-html.light .text-neutral-500,
-html.light .text-neutral-600 {
+html.light [class*="text-neutral-500"] {
+  color: #475569 !important;
+}
+
+html.light [class*="text-neutral-600"] {
   color: #64748b !important;
+}
+
+/* Mission Duration Pill in Light Mode */
+html.light .mission-pill,
+html.light [title*="Total time logged under mission"],
+html.light [title*="mission"] {
+  background-color: #fef3c7 !important;
+  border-color: #fde68a !important;
+  color: #92400e !important;
+}
+html.light .mission-pill span,
+html.light [title*="Total time logged under mission"] span,
+html.light [title*="mission"] span {
+  color: #92400e !important;
+}
+html.light .mission-pill .font-semibold,
+html.light [title*="Total time logged under mission"] .font-semibold {
+  color: #78350f !important;
+}
+
+/* Closed Day Badge in Light Mode */
+html.light .closed-badge,
+html.light [class*="bg-neutral-800/80"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
 }
 
 /* Inputs, Textareas & Selects */
 html.light input,
 html.light textarea,
 html.light select {
-  background-color: #f8fafc !important;
+  background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
 }
@@ -159,58 +174,68 @@ html.light .hover\:bg-white:hover {
 }
 
 /* Modal Backdrops & Overlays */
-html.light .fixed.inset-0.bg-black\/80,
-html.light .fixed.inset-0.bg-black\/75,
-html.light .fixed.inset-0.bg-black\/70 {
+html.light .fixed.inset-0[class*="bg-black"] {
   background-color: rgba(15, 23, 42, 0.5) !important;
 }
 
-/* Colored Badge Accents in Light Mode */
-html.light .bg-amber-950\/40,
-html.light .bg-amber-950\/50 {
+/* Colored Badge Accents in Light Mode (All opacities e.g. /50, /40, /30, /20) */
+html.light [class*="bg-amber-950"] {
   background-color: #fef3c7 !important;
   border-color: #fcd34d !important;
   color: #92400e !important;
 }
+html.light [class*="bg-amber-950"] span {
+  color: #92400e !important;
+}
 
-html.light .bg-emerald-950\/40,
-html.light .bg-emerald-950\/50 {
+html.light [class*="bg-emerald-950"] {
   background-color: #d1fae5 !important;
   border-color: #6ee7b7 !important;
   color: #065f46 !important;
 }
+html.light [class*="bg-emerald-950"] span {
+  color: #065f46 !important;
+}
 
-html.light .bg-rose-950\/40,
-html.light .bg-rose-950\/50 {
+html.light [class*="bg-rose-950"] {
   background-color: #ffe4e6 !important;
   border-color: #fda4af !important;
   color: #9f1239 !important;
 }
+html.light [class*="bg-rose-950"] span {
+  color: #9f1239 !important;
+}
 
-html.light .bg-indigo-950\/40,
-html.light .bg-indigo-950\/50 {
+html.light [class*="bg-indigo-950"] {
   background-color: #e0e7ff !important;
   border-color: #a5b4fc !important;
   color: #3730a3 !important;
 }
+html.light [class*="bg-indigo-950"] span {
+  color: #3730a3 !important;
+}
 
 html.light .text-amber-400,
-html.light .text-amber-300 {
+html.light .text-amber-300,
+html.light [class*="text-amber-"] {
   color: #b45309 !important;
 }
 
 html.light .text-emerald-400,
-html.light .text-emerald-300 {
+html.light .text-emerald-300,
+html.light [class*="text-emerald-"] {
   color: #047857 !important;
 }
 
 html.light .text-rose-400,
-html.light .text-rose-300 {
+html.light .text-rose-300,
+html.light [class*="text-rose-"] {
   color: #be123c !important;
 }
 
 html.light .text-indigo-400,
-html.light .text-indigo-300 {
+html.light .text-indigo-300,
+html.light [class*="text-indigo-"] {
   color: #4338ca !important;
 }
 

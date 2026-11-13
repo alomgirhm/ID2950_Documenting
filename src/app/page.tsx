@@ -1841,7 +1841,7 @@ export default function ID2950Page() {
                         {currentMonthStats.missions.slice(0, 3).map((m) => (
                           <span
                             key={m.mission}
-                            className="text-xs font-mono px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-amber-300 flex items-center gap-1"
+                            className="mission-pill text-xs font-mono px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-amber-300 flex items-center gap-1"
                           >
                             <span className="text-[10px]">🎯</span>
                             <span className="text-neutral-400">{m.mission}:</span>
@@ -2017,7 +2017,7 @@ export default function ID2950Page() {
                           {day.name}
                         </h2>
                         {isDayCollapsed && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400 border border-neutral-700">
+                          <span className="closed-badge text-[10px] font-mono px-2 py-0.5 rounded-md bg-neutral-800/80 text-neutral-400 border border-neutral-700">
                             Closed
                           </span>
                         )}
@@ -2061,12 +2061,12 @@ export default function ID2950Page() {
                       {missionDurations.map((md) => (
                         <span
                           key={md.mission}
-                          className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-neutral-900/90 text-amber-300 border border-neutral-800 hover:border-amber-750/50 flex items-center gap-1.5 transition shadow-xs"
+                          className="mission-pill text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-neutral-900/90 text-amber-300 border border-neutral-800 hover:border-amber-750/50 flex items-center gap-1.5 transition shadow-xs"
                           title={`Total time logged under mission "${md.mission}" for this day`}
                         >
                           <span className="text-[10px] text-amber-400">🎯</span>
-                          <span className="text-neutral-400 font-medium">{md.mission}:</span>
-                          <span className="font-semibold text-white">{md.duration}</span>
+                          <span className="text-neutral-400 font-medium mission-name">{md.mission}:</span>
+                          <span className="font-semibold text-white mission-dur">{md.duration}</span>
                         </span>
                       ))}
                     </div>
