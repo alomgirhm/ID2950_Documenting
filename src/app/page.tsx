@@ -20,7 +20,11 @@ import {
   ClipboardPaste, 
   Files,
   Target,
-  BookOpen 
+  BookOpen,
+  FolderArchive,
+  FolderOpen,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
@@ -29,23 +33,25 @@ import {
   calculateDayTotalDuration,
   calculateMissionDurations,
   calculateTotalAppUsageDuration,
+  calculateDayDetailedStats,
 } from '@/lib/timeUtils';
 
 const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
+const COLLAPSED_MONTHS_KEY = 'id2950_collapsed_months_v1';
 const MISSIONS_KEY = 'id2950_missions_v1';
 
-export const DEFAULT_MISSIONS = ['ID2950'];
+const DEFAULT_MISSIONS = ['ID2950'];
 const FORBIDDEN_MISSIONS = ['coding', 'research', 'study', 'personal'];
 
-export function sanitizeMissionList(list: string[]): string[] {
+function sanitizeMissionList(list: string[]): string[] {
   const filtered = (list || []).filter(
     (m) => Boolean(m && typeof m === 'string') && !FORBIDDEN_MISSIONS.includes(m.toLowerCase().trim())
   );
   return filtered.includes('ID2950') ? filtered : ['ID2950', ...filtered];
 }
 
-export const DHIKR_PRESETS = [
+const DHIKR_PRESETS = [
   'La ilaha illallah',
   'Astaghfirullah',
   'Subhanallah',
@@ -60,7 +66,7 @@ export const DHIKR_PRESETS = [
   'Custom...',
 ];
 
-export function createDefaultDhikr(dayId: string): DhikrItem[] {
+function createDefaultDhikr(dayId: string): DhikrItem[] {
   return [
     { id: `dhikr-${dayId}-1`, name: 'La ilaha illallah', count: '' },
     { id: `dhikr-${dayId}-2`, name: 'Astaghfirullah', count: '' },
@@ -202,6 +208,7 @@ export default function ID2950Page() {
   const [pasteWellbeingText, setPasteWellbeingText] = useState<string>('');
   const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
+  const [hiddenMonths, setHiddenMonths] = useState<Record<string, boolean>>({});
   const [missions, setMissions] = useState<string[]>(DEFAULT_MISSIONS);
   const activeMissions = sanitizeMissionList(missions);
   const [isCreateMissionOpen, setIsCreateMissionOpen] = useState<boolean>(false);
@@ -215,6 +222,17 @@ export default function ID2950Page() {
       const next = { ...prev, [dayId]: !prev[dayId] };
       try {
         localStorage.setItem(COLLAPSED_DAYS_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // Toggle Month Cover / Hide state
+  const toggleMonthCover = (monthName: string) => {
+    setHiddenMonths((prev) => {
+      const next = { ...prev, [monthName]: !prev[monthName] };
+      try {
+        localStorage.setItem(COLLAPSED_MONTHS_KEY, JSON.stringify(next));
       } catch {}
       return next;
     });
@@ -334,6 +352,17 @@ export default function ID2950Page() {
         } catch {}
       }
 
+      // Load hidden / covered months state
+      const savedHiddenMonths = localStorage.getItem(COLLAPSED_MONTHS_KEY);
+      if (savedHiddenMonths) {
+        try {
+          const parsedMonths = JSON.parse(savedHiddenMonths);
+          if (parsedMonths && typeof parsedMonths === 'object') {
+            setHiddenMonths(parsedMonths);
+          }
+        } catch {}
+      }
+
       // Load custom missions state
       const REMOVED_PRESETS = ['coding', 'research', 'study', 'personal'];
       const savedMissions = localStorage.getItem(MISSIONS_KEY);
@@ -358,10 +387,11 @@ export default function ID2950Page() {
     setIsLoaded(true);
   }, []);
 
-  // Collapse or Expand All Days for the active month
-  const handleToggleAllDays = (collapse: boolean) => {
+  // Collapse or Expand All Days for a specific month
+  const handleToggleAllDays = (collapse: boolean, targetMonth: string = activeMonth) => {
     const next: Record<string, boolean> = { ...collapsedDays };
-    filteredDays.forEach((d) => {
+    const targetDays = targetMonth === '__ALL__' ? days : days.filter((d) => d.month === targetMonth);
+    targetDays.forEach((d) => {
       next[d.id] = collapse;
     });
     setCollapsedDays(next);
@@ -381,12 +411,13 @@ export default function ID2950Page() {
 
   // Distinct months list
   const months = Array.from(new Set(days.map((d) => d.month).filter(Boolean)));
-  if (!months.includes(activeMonth) && activeMonth) {
+  if (!months.includes(activeMonth) && activeMonth && activeMonth !== '__ALL__') {
     months.push(activeMonth);
   }
 
   // Filter days for active month
-  const filteredDays = days.filter((d) => d.month === activeMonth);
+  const filteredDays = activeMonth === '__ALL__' ? days : days.filter((d) => d.month === activeMonth);
+  const monthsToDisplay = activeMonth === '__ALL__' ? months : [activeMonth];
 
   // Toggle notes dropdown for a specific entry
   const toggleNotes = (entryId: string) => {
@@ -402,10 +433,12 @@ export default function ID2950Page() {
     const trimmed = newDayName.trim();
     if (!trimmed) return;
 
+    const targetMonth = activeMonth === '__ALL__' ? (months[months.length - 1] || 'October 2026') : activeMonth;
+
     const newDay: DayLog = {
       id: `day-${Date.now()}`,
       name: trimmed,
-      month: activeMonth,
+      month: targetMonth,
       entries: [
         {
           id: `entry-${Date.now()}-1`,
@@ -423,6 +456,17 @@ export default function ID2950Page() {
     const updated = [...days, newDay];
     saveDays(updated);
     setNewDayName('');
+
+    // If target month was covered/hidden, unhide it so the user sees the new day
+    if (targetMonth && hiddenMonths[targetMonth]) {
+      setHiddenMonths((prev) => {
+        const next = { ...prev, [targetMonth]: false };
+        try {
+          localStorage.setItem(COLLAPSED_MONTHS_KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
 
     // Collapse all previous days, auto-expand the newly assigned day
     setCollapsedDays((prev) => {
@@ -1039,9 +1083,13 @@ export default function ID2950Page() {
                 onChange={(e) => setActiveMonth(e.target.value)}
                 className="bg-transparent text-xs text-neutral-200 font-medium px-2 py-1.5 outline-none cursor-pointer"
               >
+                <option value="__ALL__" className="bg-neutral-900 text-amber-300 font-semibold">
+                  All Months (Overview)
+                </option>
                 {months.map((m) => (
                   <option key={m} value={m} className="bg-neutral-900 text-neutral-200">
                     {m}
+                    {m} {hiddenMonths[m] ? '✓ (Covered)' : ''}
                   </option>
                 ))}
               </select>
@@ -1077,6 +1125,36 @@ export default function ID2950Page() {
                 className="text-xs text-neutral-400 hover:text-white px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 transition font-medium"
               >
                 + Month
+              </button>
+            )}
+
+            {/* Quick Cover Up / Hide Month Button */}
+            {activeMonth !== '__ALL__' && (
+              <button
+                type="button"
+                onClick={() => toggleMonthCover(activeMonth)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl border transition font-medium shadow-sm cursor-pointer ${
+                  hiddenMonths[activeMonth]
+                    ? 'bg-amber-950/40 hover:bg-amber-900/50 border-amber-800/50 text-amber-300 font-semibold shadow-xs'
+                    : 'bg-neutral-900 hover:bg-neutral-850 border-neutral-800 text-neutral-300 hover:text-white'
+                }`}
+                title={
+                  hiddenMonths[activeMonth]
+                    ? `Unhide and open all days for ${activeMonth}`
+                    : `Cover up ${activeMonth} and hide its days once completed`
+                }
+              >
+                {hiddenMonths[activeMonth] ? (
+                  <>
+                    <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Unhide {activeMonth.split(' ')[0]}</span>
+                  </>
+                ) : (
+                  <>
+                    <FolderArchive className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Hide {activeMonth.split(' ')[0]}</span>
+                  </>
+                )}
               </button>
             )}
 
@@ -1585,16 +1663,198 @@ export default function ID2950Page() {
           </div>
         )}
         
-        {/* Days List */}
-        {filteredDays.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-neutral-900 rounded-2xl px-4">
-            <p className="text-sm font-medium text-neutral-400">No days added for {activeMonth} yet.</p>
-            <p className="text-xs text-neutral-600 mt-1">
-              Add your first day below with your self-assigned name.
-            </p>
-          </div>
-        ) : (
-          filteredDays.map((day) => {
+        {/* Months & Days Stream */}
+        {monthsToDisplay.map((currentMonth) => {
+          const currentMonthDays = days.filter((d) => d.month === currentMonth);
+          const currentMonthEntries = currentMonthDays.flatMap((d) => d.entries);
+          const currentMonthStats = calculateDayDetailedStats(currentMonthEntries);
+          const currentMonthApps = currentMonthDays.flatMap((d) => d.appUsage || []);
+          const currentMonthDistraction = calculateTotalAppUsageDuration(currentMonthApps);
+          const isMonthCovered = !!hiddenMonths[currentMonth];
+
+          return (
+            <div key={currentMonth} className="space-y-4 sm:space-y-5">
+              {/* Month Card: Covered / Hidden State vs Open State */}
+              {isMonthCovered ? (
+                /* COVERED UP / HIDDEN MONTH CARD */
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 sm:p-6 shadow-md transition-all relative overflow-hidden">
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-500 to-amber-700" />
+                  
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-2.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="p-2 rounded-xl bg-amber-950/50 border border-amber-800/50 text-amber-400 flex-shrink-0">
+                          <FolderArchive className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide font-mono">
+                              {currentMonth}
+                            </h2>
+                            <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300 border border-emerald-800/40 font-semibold flex items-center gap-1">
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              Month Completed & Covered Up
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-400 mt-0.5">
+                            This month is covered up to save screen space. All {currentMonthDays.length} days are safely documented.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Summary Metrics Row */}
+                      <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                        <span className="text-xs font-mono px-3 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-300 font-semibold">
+                          {currentMonthDays.length} {currentMonthDays.length === 1 ? 'Day' : 'Days'}
+                        </span>
+                        {currentMonthStats.totalDuration && (
+                          <span className="text-xs font-mono px-3 py-1 rounded-lg bg-amber-950/40 border border-amber-800/40 text-amber-300 font-semibold shadow-xs">
+                            Total: {currentMonthStats.totalDuration}
+                          </span>
+                        )}
+                        {currentMonthDistraction && (
+                          <span className="text-xs font-mono px-3 py-1 rounded-lg bg-rose-950/30 border border-rose-900/40 text-rose-300 font-semibold flex items-center gap-1.5 shadow-xs">
+                            <Smartphone className="w-3 h-3 text-rose-400" />
+                            Distraction: {currentMonthDistraction}
+                          </span>
+                        )}
+                        <span className="text-xs font-mono px-3 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-neutral-400">
+                          {currentMonthEntries.length} Sessions Logged
+                        </span>
+
+                        {/* Mission Badges */}
+                        {currentMonthStats.missions.slice(0, 3).map((m) => (
+                          <span
+                            key={m.mission}
+                            className="text-xs font-mono px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-amber-300 flex items-center gap-1"
+                          >
+                            <span className="text-[10px]">🎯</span>
+                            <span className="text-neutral-400">{m.mission}:</span>
+                            <span className="text-white font-semibold">{m.duration}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right Action Buttons */}
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => toggleMonthCover(currentMonth)}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-neutral-950 font-bold text-xs shadow-md transition cursor-pointer active:scale-[0.98]"
+                        title={`Unhide and open all days for ${currentMonth}`}
+                      >
+                        <FolderOpen className="w-4 h-4 text-neutral-950" />
+                        <span>Open / Unhide {currentMonth.split(' ')[0]}</span>
+                      </button>
+
+                      {currentMonthDays.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRangeStart(1);
+                            setRangeEnd(currentMonthDays.length);
+                            setCustomRangeTitle(`Entire Month — ${currentMonth}`);
+                            setIsMultiDayExportOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-white text-xs font-medium transition cursor-pointer shadow-sm"
+                          title={`Export full ${currentMonth} report as PDF`}
+                        >
+                          <Files className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="hidden sm:inline">Month PDF</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* OPEN MONTH HEADER BAR */
+                <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-4 sm:p-5 shadow-sm">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="p-1.5 rounded-lg bg-amber-950/40 border border-amber-800/40 text-amber-400 flex-shrink-0">
+                        <Calendar className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h2 className="text-base sm:text-lg font-bold text-white tracking-wide font-mono">
+                            {currentMonth}
+                          </h2>
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-400 border border-neutral-700">
+                            {currentMonthDays.length} {currentMonthDays.length === 1 ? 'day' : 'days'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-neutral-400 mt-1 font-mono">
+                          {currentMonthStats.totalDuration && (
+                            <span className="text-amber-300 font-semibold">
+                              Total: {currentMonthStats.totalDuration}
+                            </span>
+                          )}
+                          {currentMonthDistraction && (
+                            <>
+                              <span className="text-neutral-600">•</span>
+                              <span className="text-rose-300">
+                                Distraction: {currentMonthDistraction}
+                              </span>
+                            </>
+                          )}
+                          <span className="text-neutral-600">•</span>
+                          <span>{currentMonthEntries.length} sessions</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions: Cover Up Month Button & Collapse Days */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => toggleMonthCover(currentMonth)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-amber-800/40 hover:border-amber-750 text-amber-300 hover:text-amber-200 text-xs font-semibold transition cursor-pointer shadow-sm group"
+                        title={`Cover up the entire ${currentMonth} month to hide its days once completed`}
+                      >
+                        <FolderArchive className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+                        <span>Cover Up {currentMonth.split(' ')[0]} Month</span>
+                      </button>
+
+                      {currentMonthDays.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allCollapsed = currentMonthDays.every((d) => !!collapsedDays[d.id]);
+                            handleToggleAllDays(!allCollapsed, currentMonth);
+                          }}
+                          className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white px-2.5 py-2 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 transition cursor-pointer"
+                          title="Collapse or expand all days in this month"
+                        >
+                          {currentMonthDays.every((d) => !!collapsedDays[d.id]) ? (
+                            <>
+                              <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                              <span className="hidden sm:inline">Expand Days</span>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                              <span className="hidden sm:inline">Collapse Days</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Days List (Rendered ONLY when month is open / not covered) */}
+              {!isMonthCovered && (
+                currentMonthDays.length === 0 ? (
+                  <div className="text-center py-16 border border-dashed border-neutral-900 rounded-2xl px-4">
+                    <p className="text-sm font-medium text-neutral-400">No days added for {currentMonth} yet.</p>
+                    <p className="text-xs text-neutral-600 mt-1">
+                      Add your first day below with your self-assigned name.
+                    </p>
+                  </div>
+                ) : (
+                  currentMonthDays.map((day) => {
             const isDayCollapsed = !!collapsedDays[day.id];
             const dayTotal = calculateDayTotalDuration(day.entries);
             const missionDurations = calculateMissionDurations(day.entries);
@@ -2541,7 +2801,10 @@ export default function ID2950Page() {
               </section>
             );
           })
-        )}
+        ))}
+      </div>
+    );
+  })}
 
         {/* Option to Add New Day with Name */}
         <section className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4 sm:p-6 lg:p-7 shadow-sm">
