@@ -14,6 +14,7 @@ body {
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Custom dark scrollbar */
@@ -30,5 +31,186 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
+}
+
+/* ========================================================
+   LIGHT MODE STYLING & HIGH-CONTRAST PALETTE
+   ======================================================== */
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Scrollbar in Light Mode */
+html.light ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Backgrounds */
+html.light .bg-neutral-950,
+html.light .bg-black {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-neutral-950\/60,
+html.light .bg-neutral-950\/80 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-neutral-900 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-neutral-900\/60,
+html.light .bg-neutral-900\/40,
+html.light .bg-neutral-900\/50 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-neutral-850,
+html.light .bg-neutral-800 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .hover\:bg-neutral-850:hover,
+html.light .hover\:bg-neutral-800:hover,
+html.light .hover\:bg-neutral-900:hover {
+  background-color: #e2e8f0 !important;
+}
+
+/* Borders */
+html.light .border-neutral-900,
+html.light .border-neutral-850,
+html.light .border-neutral-800,
+html.light .border-neutral-750,
+html.light .border-neutral-700 {
+  border-color: #e2e8f0 !important;
+}
+
+/* Card Shadows & Elevation */
+html.light section,
+html.light .shadow-sm,
+html.light .shadow-md {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.03) !important;
+}
+
+/* Typography in Light Mode */
+html.light .text-white,
+html.light .text-neutral-100,
+html.light .text-neutral-200 {
+  color: #0f172a !important;
+}
+
+html.light .text-neutral-300,
+html.light .text-neutral-400 {
+  color: #334155 !important;
+}
+
+html.light .text-neutral-500,
+html.light .text-neutral-600 {
+  color: #64748b !important;
+}
+
+/* Inputs, Textareas & Selects */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light input:focus,
+html.light textarea:focus,
+html.light select:focus {
+  background-color: #ffffff !important;
+  border-color: #f59e0b !important;
+  outline: 2px solid rgba(245, 158, 11, 0.2) !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Select options */
+html.light select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* Action Buttons */
+html.light .bg-neutral-100 {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+}
+html.light .hover\:bg-white:hover {
+  background-color: #1e293b !important;
+}
+
+/* Modal Backdrops & Overlays */
+html.light .fixed.inset-0.bg-black\/80,
+html.light .fixed.inset-0.bg-black\/75,
+html.light .fixed.inset-0.bg-black\/70 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+/* Colored Badge Accents in Light Mode */
+html.light .bg-amber-950\/40,
+html.light .bg-amber-950\/50 {
+  background-color: #fef3c7 !important;
+  border-color: #fcd34d !important;
+  color: #92400e !important;
+}
+
+html.light .bg-emerald-950\/40,
+html.light .bg-emerald-950\/50 {
+  background-color: #d1fae5 !important;
+  border-color: #6ee7b7 !important;
+  color: #065f46 !important;
+}
+
+html.light .bg-rose-950\/40,
+html.light .bg-rose-950\/50 {
+  background-color: #ffe4e6 !important;
+  border-color: #fda4af !important;
+  color: #9f1239 !important;
+}
+
+html.light .bg-indigo-950\/40,
+html.light .bg-indigo-950\/50 {
+  background-color: #e0e7ff !important;
+  border-color: #a5b4fc !important;
+  color: #3730a3 !important;
+}
+
+html.light .text-amber-400,
+html.light .text-amber-300 {
+  color: #b45309 !important;
+}
+
+html.light .text-emerald-400,
+html.light .text-emerald-300 {
+  color: #047857 !important;
+}
+
+html.light .text-rose-400,
+html.light .text-rose-300 {
+  color: #be123c !important;
+}
+
+html.light .text-indigo-400,
+html.light .text-indigo-300 {
+  color: #4338ca !important;
 }
 

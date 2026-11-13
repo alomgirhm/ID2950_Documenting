@@ -24,7 +24,9 @@ import {
   FolderArchive,
   FolderOpen,
   Eye,
-  EyeOff
+  EyeOff,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { DayLog, TimeEntry, AppUsageItem, DhikrItem } from '@/types';
 import { downloadDayPDF, downloadSingleSessionPDF, downloadMultiDayPDF } from '@/lib/pdfExport';
@@ -40,6 +42,7 @@ const STORAGE_KEY = 'id2950_clean_canvas_v1';
 const COLLAPSED_DAYS_KEY = 'id2950_collapsed_days_v1';
 const COLLAPSED_MONTHS_KEY = 'id2950_collapsed_months_v1';
 const MISSIONS_KEY = 'id2950_missions_v1';
+const THEME_KEY = 'id2950_theme_v1';
 
 const DEFAULT_MISSIONS = ['ID2950'];
 const FORBIDDEN_MISSIONS = ['coding', 'research', 'study', 'personal'];
@@ -248,12 +251,26 @@ export default function ID2950Page() {
   const [collapsedDhikr, setCollapsedDhikr] = useState<Record<string, boolean>>({});
   const [collapsedDays, setCollapsedDays] = useState<Record<string, boolean>>({});
   const [hiddenMonths, setHiddenMonths] = useState<Record<string, boolean>>({});
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [missions, setMissions] = useState<string[]>(DEFAULT_MISSIONS);
   const activeMissions = sanitizeMissionList(missions);
   const [isCreateMissionOpen, setIsCreateMissionOpen] = useState<boolean>(false);
   const [newMissionName, setNewMissionName] = useState<string>('');
   const [targetMissionEntry, setTargetMissionEntry] = useState<{ dayId: string; entryId: string } | null>(null);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Toggle Dark / Light Mode theme
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    try {
+      localStorage.setItem(THEME_KEY, nextTheme);
+    } catch {}
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.remove('dark', 'light');
+      document.documentElement.classList.add(nextTheme);
+    }
+  };
 
   // Toggle Day card collapse / dropdown
   const toggleDayCollapse = (dayId: string) => {
@@ -438,6 +455,21 @@ export default function ID2950Page() {
         } catch {}
       } else {
         localStorage.setItem(MISSIONS_KEY, JSON.stringify(DEFAULT_MISSIONS));
+      }
+
+      // Load saved theme preference (Dark or Light)
+      const savedTheme = localStorage.getItem(THEME_KEY);
+      if (savedTheme === 'light' || savedTheme === 'dark') {
+        setTheme(savedTheme);
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.remove('dark', 'light');
+          document.documentElement.classList.add(savedTheme);
+        }
+      } else {
+        if (typeof document !== 'undefined') {
+          document.documentElement.classList.remove('light');
+          document.documentElement.classList.add('dark');
+        }
       }
     } catch {
       setDays(DEFAULT_DAYS);
@@ -1302,6 +1334,26 @@ export default function ID2950Page() {
               accept=".json"
               className="hidden"
             />
+
+            {/* Theme Toggle Button (Dark / Light Mode) */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 transition font-medium shadow-sm cursor-pointer"
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? (
+                <>
+                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="hidden sm:inline">Dark Mode</span>
+                </>
+              )}
+            </button>
           </div>
 
         </div>
