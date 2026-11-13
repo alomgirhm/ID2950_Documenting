@@ -73,6 +73,45 @@ function createDefaultDhikr(dayId: string): DhikrItem[] {
   ];
 }
 
+function detectMonthFromName(dayName: string, fallbackMonth: string = 'October 2026'): string {
+  if (!dayName || typeof dayName !== 'string') return fallbackMonth;
+  const lower = dayName.toLowerCase().trim();
+
+  const monthConfigs = [
+    { name: 'January', regex: /\b(jan|january)\b|জানু/i, num: '01' },
+    { name: 'February', regex: /\b(feb|february)\b|ফেব্রু/i, num: '02' },
+    { name: 'March', regex: /\b(mar|march)\b|মার্চ/i, num: '03' },
+    { name: 'April', regex: /\b(apr|april)\b|এপ্রিল/i, num: '04' },
+    { name: 'May', regex: /\b(may)\b|মে/i, num: '05' },
+    { name: 'June', regex: /\b(jun|june)\b|জুন/i, num: '06' },
+    { name: 'July', regex: /\b(jul|july)\b|জুলাই/i, num: '07' },
+    { name: 'August', regex: /\b(aug|august)\b|আগস্ট/i, num: '08' },
+    { name: 'September', regex: /\b(sep|sept|september)\b|সেপ্টে/i, num: '09' },
+    { name: 'October', regex: /\b(oct|october)\b|অক্টো/i, num: '10' },
+    { name: 'November', regex: /\b(nov|november)\b|নভে/i, num: '11' },
+    { name: 'December', regex: /\b(dec|december)\b|ডিসে/i, num: '12' },
+  ];
+
+  const yearMatch = dayName.match(/\b(20\d{2})\b/) || fallbackMonth.match(/\b(20\d{2})\b/);
+  const year = yearMatch ? yearMatch[1] : '2026';
+
+  for (const m of monthConfigs) {
+    if (m.regex.test(lower)) {
+      return `${m.name} ${year}`;
+    }
+  }
+
+  // Check numeric dates like DD/11 or DD-11
+  const numMatch = lower.match(/(?:^|\D)(?:0?[1-9]|[12]\d|3[01])[\/\-\.](0?[1-9]|1[0-2])(?:\b|\D)/);
+  if (numMatch) {
+    const monthNum = numMatch[1].padStart(2, '0');
+    const matched = monthConfigs.find((m) => m.num === monthNum);
+    if (matched) return `${matched.name} ${year}`;
+  }
+
+  return fallbackMonth;
+}
+
 const DEFAULT_DAYS: DayLog[] = [
   {
     id: 'day-1',
@@ -307,24 +346,37 @@ export default function ID2950Page() {
       let currentDays: DayLog[] = DEFAULT_DAYS;
       if (stored) {
         const parsed: DayLog[] = JSON.parse(stored);
-        const cleaned: DayLog[] = parsed.map((d) => ({
-          ...d,
-          dhikrList:
-            d.dhikrList && d.dhikrList.length > 0
-              ? d.dhikrList
-              : createDefaultDhikr(d.id),
-          appUsage: (d.appUsage || []).map((app) => ({
-            ...app,
-            duration:
-              app.duration?.includes('stopwatch') ||
-              app.duration?.startsWith('[') ||
-              app.duration?.startsWith('{')
-                ? ''
-                : app.duration,
-          })),
-        }));
+        let migratedAnyMonth = false;
+        const cleaned: DayLog[] = parsed.map((d) => {
+          const autoMonth = detectMonthFromName(d.name || '', d.month || 'October 2026');
+          if (autoMonth !== d.month) {
+            migratedAnyMonth = true;
+          }
+          return {
+            ...d,
+            month: autoMonth,
+            dhikrList:
+              d.dhikrList && d.dhikrList.length > 0
+                ? d.dhikrList
+                : createDefaultDhikr(d.id),
+            appUsage: (d.appUsage || []).map((app) => ({
+              ...app,
+              duration:
+                app.duration?.includes('stopwatch') ||
+                app.duration?.startsWith('[') ||
+                app.duration?.startsWith('{')
+                  ? ''
+                  : app.duration,
+            })),
+          };
+        });
         currentDays = cleaned;
         setDays(cleaned);
+        if (migratedAnyMonth) {
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+          } catch {}
+        }
       } else {
         setDays(DEFAULT_DAYS);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_DAYS));
@@ -333,7 +385,13 @@ export default function ID2950Page() {
       // Automatically focus on the last day assigned by the user
       if (currentDays.length > 0) {
         const lastDay = currentDays[currentDays.length - 1];
-        if (lastDay.month) {
+        const uniqueMonths = Array.from(new Set(currentDays.map((d) => d.month).filter(Boolean)));
+
+        // If user has multiple months (e.g. October covered & November active),
+        // default to '__ALL__' so past completed months show covered and active month is open!
+        if (uniqueMonths.length > 1) {
+          setActiveMonth('__ALL__');
+        } else if (lastDay.month) {
           setActiveMonth(lastDay.month);
         }
 
@@ -433,7 +491,8 @@ export default function ID2950Page() {
     const trimmed = newDayName.trim();
     if (!trimmed) return;
 
-    const targetMonth = activeMonth === '__ALL__' ? (months[months.length - 1] || 'October 2026') : activeMonth;
+    const fallbackMonth = activeMonth === '__ALL__' ? (months[months.length - 1] || 'November 2026') : activeMonth;
+    const targetMonth = detectMonthFromName(trimmed, fallbackMonth);
 
     const newDay: DayLog = {
       id: `day-${Date.now()}`,
@@ -501,9 +560,14 @@ export default function ID2950Page() {
       setEditingDayId(null);
       return;
     }
-    const updated = days.map((d) =>
-      d.id === dayId ? { ...d, name: editingDayName.trim() } : d
-    );
+    const trimmed = editingDayName.trim();
+    const updated = days.map((d) => {
+      if (d.id === dayId) {
+        const targetMonth = detectMonthFromName(trimmed, d.month);
+        return { ...d, name: trimmed, month: targetMonth };
+      }
+      return d;
+    });
     saveDays(updated);
     setEditingDayId(null);
   };
@@ -1088,7 +1152,6 @@ export default function ID2950Page() {
                 </option>
                 {months.map((m) => (
                   <option key={m} value={m} className="bg-neutral-900 text-neutral-200">
-                    {m}
                     {m} {hiddenMonths[m] ? '✓ (Covered)' : ''}
                   </option>
                 ))}
